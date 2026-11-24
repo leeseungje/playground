@@ -143,6 +143,7 @@ export class Room {
     let p = this.players.find((x) => x.token === token);
     if (p) {
       const wasAway = !p.connected;
+      this.cancelDrop(p);
       p.socketId = socketId;
       p.connected = true;
       // 토너먼트에서 기권한 뒤(아직 판이 안 끝나 자리에 남아 있을 때) 돌아오면 구경만
@@ -203,6 +204,28 @@ export class Room {
     this.departed.set(p.token, { chips: p.chips, bought: p.bought, rebuys: p.rebuys, stats: p.stats, place: p.place });
   }
 
+/** 끊긴 사람은 잠깐(새로고침 등) 기다렸다가 돌아오지 않으면 자리에서 뺀다 */
+  scheduleDrop(p) {
+    this.dropTimers ??= new Map();
+    this.dropTimers.get(p.id)?.();
+    const id = p.id;
+    this.dropTimers.set(
+      id,
+      this.schedule(() => {
+        this.dropTimers.delete(id);
+        const x = this.player(id);
+        if (x && !x.connected) {
+          this.leave(id);
+          this.changed();
+        }
+      }, this.opt.dropMs ?? 20_000),
+    );
+  }
+  cancelDrop(p) {
+    this.dropTimers?.get(p.id)?.();
+    this.dropTimers?.delete(p.id);
+  }
+
   hostConnected() {
     const h = this.player(this.hostId);
     return !!h && h.connected && !h.leaving;
@@ -219,9 +242,10 @@ export class Room {
     if (!p) return;
     p.connected = false;
     p.socketId = null;
-    this.say(`${p.name}님의 접속이 끊겼어요.`);
+    this.say(`${p.name}님의 접속이 끊겼어요. 20초 안에 돌아오지 않으면 자리에서 빠져요.`);
     if (this.hostId === p.id) this.pickNewHost();
     this.rescheduleTurnIfNeeded(p.id);
+    this.scheduleDrop(p);
     this.changed();
   }
 

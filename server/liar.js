@@ -103,6 +103,28 @@ export class LiarRoom {
     const h = this.player(this.hostId);
     return !!h && h.connected;
   }
+/** 끊긴 사람은 잠깐(새로고침 등) 기다렸다가 돌아오지 않으면 자리에서 뺀다 */
+  scheduleDrop(p) {
+    this.dropTimers ??= new Map();
+    this.dropTimers.get(p.id)?.();
+    const id = p.id;
+    this.dropTimers.set(
+      id,
+      this.schedule(() => {
+        this.dropTimers.delete(id);
+        const x = this.player(id);
+        if (x && !x.connected) {
+          this.leave(id);
+          this.changed();
+        }
+      }, this.opt.dropMs ?? 20_000),
+    );
+  }
+  cancelDrop(p) {
+    this.dropTimers?.get(p.id)?.();
+    this.dropTimers?.delete(p.id);
+  }
+
   pickHost() {
     const next = this.players.find((p) => p.connected);
     this.hostId = next?.id ?? null;
@@ -118,6 +140,7 @@ export class LiarRoom {
   join({ token, name, socketId }) {
     let p = this.players.find((x) => x.token === token);
     if (p) {
+      this.cancelDrop(p);
       p.socketId = socketId;
       p.connected = true;
       if (!this.hostConnected()) this.hostId = p.id;
@@ -148,6 +171,7 @@ export class LiarRoom {
     p.connected = false;
     p.socketId = null;
     if (this.hostId === p.id) this.pickHost();
+    this.scheduleDrop(p);
     // 힌트 차례였다면 짧게 기다렸다가 넘긴다
     if (this.phase === 'hint' && this.currentTurn() === p.id) this.later(this.opt.awayMs, () => this.submitHint(p.id, null, true));
     this.maybeFinishVote();

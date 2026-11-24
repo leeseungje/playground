@@ -179,3 +179,13 @@ test('진행 중 화면 상태로 라이어가 드러나지 않음 (점수·횟�
   for (const p of ps.slice(0, 2)) room.vote(p.id, ps.find((x) => x.id !== p.id).id);
   check();
 });
+
+test('끊긴 사람은 20초 뒤 자리에서 빠지고, 그 전에 돌아오면 그대로', () => {
+  const { room, ps, step } = setup(4);
+  room.disconnect('s3');
+  room.disconnect('s2');
+  room.join({ token: ps[2].token, name: 'P2', socketId: 's2b' }); // P2 는 돌아옴
+  while (step());
+  assert.equal(room.player(ps[3].id), undefined, 'P3 는 빠짐');
+  assert.ok(room.player(ps[2].id), 'P2 는 남음');
+});

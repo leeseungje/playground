@@ -158,3 +158,15 @@ test('다음 경주로 자동 진행, 멈춤', () => {
   step();
   assert.equal(r.phase, 'idle');
 });
+
+test('경마: 끊긴 사람은 20초 뒤 빠지고 칩은 보관', () => {
+  const { r, step } = room();
+  const a = join(r, 0);
+  const b = join(r, 1);
+  r.disconnect('s1');
+  while (r.player(b.id) && step());
+  assert.equal(r.player(b.id), undefined);
+  const back = r.join({ token: b.token, name: 'P1', socketId: 'x' }).player;
+  assert.equal(back.chips, 1000);
+  void a;
+});

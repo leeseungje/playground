@@ -424,6 +424,28 @@ export class RaceRoom {
     const h = this.player(this.hostId);
     return !!h && h.connected && !h.leaving;
   }
+/** 끊긴 사람은 잠깐(새로고침 등) 기다렸다가 돌아오지 않으면 자리에서 뺀다 */
+  scheduleDrop(p) {
+    this.dropTimers ??= new Map();
+    this.dropTimers.get(p.id)?.();
+    const id = p.id;
+    this.dropTimers.set(
+      id,
+      this.schedule(() => {
+        this.dropTimers.delete(id);
+        const x = this.player(id);
+        if (x && !x.connected) {
+          this.leave(id);
+          this.changed();
+        }
+      }, this.opt.dropMs ?? 20_000),
+    );
+  }
+  cancelDrop(p) {
+    this.dropTimers?.get(p.id)?.();
+    this.dropTimers?.delete(p.id);
+  }
+
   pickHost() {
     const next = this.players.find((p) => p.connected && !p.leaving);
     this.hostId = next?.id ?? null;
@@ -436,6 +458,7 @@ export class RaceRoom {
   join({ token, name, socketId }) {
     let p = this.players.find((x) => x.token === token);
     if (p) {
+      this.cancelDrop(p);
       p.socketId = socketId;
       p.connected = true;
       p.leaving = false;
@@ -477,6 +500,7 @@ export class RaceRoom {
     p.connected = false;
     p.socketId = null;
     if (this.hostId === p.id) this.pickHost();
+    this.scheduleDrop(p);
     this.changed();
   }
 

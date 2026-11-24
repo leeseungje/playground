@@ -576,3 +576,16 @@ test('설정: 블라인드 상승 1은 2로 맞춤', () => {
   room.updateSettings(ps[0].id, { blindUpHands: 1 });
   assert.equal(room.settings.blindUpHands, 2);
 });
+
+test('홀덤: 끊긴 사람은 20초 뒤 자리에서 빠짐 (판 도중이면 폴드 후)', () => {
+  const { room, clock, ps } = setup(3);
+  room.disconnect('s2');
+  assert.ok(room.player(ps[2].id));
+  while (room.player(ps[2].id) && clock.step());
+  assert.equal(room.player(ps[2].id), undefined);
+  room.start(ps[0].id);
+  const seat = room.hand.seats.find((s) => s.id === ps[1].id);
+  room.disconnect('s1');
+  runUntil(room, clock, () => !room.player(ps[1].id) || room.hand.street === 'done');
+  assert.ok(seat.folded || room.hand.street === 'done');
+});
