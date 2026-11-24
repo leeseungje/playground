@@ -76,7 +76,7 @@
         var room = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
         var target = window.GAME_SERVER.replace(/\/+$/, '') + '/' + (room ? '?room=' + room : '');
         document.getElementById('go').href = target;
-        document.getElementById('goRace').href = window.GAME_SERVER.replace(//+$/, '') + '/race/';
+        document.getElementById('goRace').href = window.GAME_SERVER.replace(/[/]+$/, '') + '/race/';
         document.getElementById('server').textContent = window.GAME_SERVER;
         if (room) {
           // 초대 링크로 들어오면 바로 그 방으로 보낸다
