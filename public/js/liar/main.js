@@ -1,6 +1,7 @@
 /* global io */
 import { $, el, toast, hideToast, session, storage, hueOf, initial } from '../util.js';
 import { modal } from '../panels.js';
+import { createSidePanel } from '../sidepanel.js';
 import { isMuted, setMuted, play } from '../sound.js';
 
 function makeToken() {
@@ -21,10 +22,8 @@ let state = null;
 let prev = null;
 let receivedAt = 0;
 let lanUrls = [];
-let cardFlipped = false; // 카드를 앞면으로 뒤집었는지
-let sideTab = 'chat';
-let lastChatId = null;
-let unread = 0;
+let cardFlipped = false;
+let hintDraft = ''; // 힌트 입력 중인 글 (화면이 다시 그려져도 유지)
 
 const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? '나간 사람';
 const me = () => state?.players.find((p) => p.id === state.me);
@@ -317,10 +316,14 @@ function renderAction() {
     case 'hint': {
       const myTurn = r.turn === s.me;
       if (myTurn) {
-        const input = el('input', { maxlength: 40, placeholder: '예: 여름에 자주 먹어요', 'aria-label': '힌트 입력' });
+        const input = el('input', { maxlength: 40, placeholder: '예: 여름에 자주 먹어요', 'aria-label': '힌트 입력', value: hintDraft });
+        input.addEventListener('input', () => (hintDraft = input.value));
         const submit = async (text) => {
           const res = await call('hint', { text });
-          if (!res.error) hideToast();
+          if (!res.error) {
+            hideToast();
+            hintDraft = '';
+          }
         };
         input.addEventListener('keydown', (e) => e.key === 'Enter' && !e.isComposing && submit(input.value));
         nodes = [
@@ -441,56 +444,29 @@ function renderPlayers() {
   );
 }
 
-let sideSig = '';
+// 옆 패널: 채팅 입력창은 고정, 점수·기록 탭만 바뀔 때 다시 그린다
+const side = createSidePanel($('#sidePanel'), { tabs: [['chat', '채팅'], ['score', '점수'], ['hist', '기록']], send, emptyText: '수상한 사람을 지목해 보세요!' });
 function renderSide() {
   const s = state;
-  const newest = s.chat.at(-1)?.id ?? 0;
-  if (lastChatId !== null && newest > lastChatId) {
-    if (sideTab !== 'chat') unread += s.chat.filter((m) => m.id > lastChatId && m.pid !== s.me).length;
-    if (s.chat.at(-1).pid !== s.me) play('pop');
-  }
-  lastChatId = newest;
-  const sig = JSON.stringify([sideTab, newest, s.history.length, s.players.map((p) => [p.name, p.score]), unread]);
-  if (sig === sideSig) return;
-  sideSig = sig;
-  const tab = (k, t) => el('button', { class: `tab${sideTab === k ? ' on' : ''}`, onclick: () => ((sideTab = k), k === 'chat' && (unread = 0), renderSide()) }, t, k === 'chat' && unread ? el('span', { class: 'badge' }, String(unread)) : null);
-  let body;
-  if (sideTab === 'chat') {
-    const list = el(
-      'ol',
-      { class: 'chat-list' },
-      s.chat.length ? s.chat.map((m) => el('li', { class: m.pid === s.me ? 'mine' : '' }, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(m.name) } }, initial(m.name)), el('div', {}, el('div', { class: 'chat-name' }, m.name), el('div', { class: 'chat-text' }, m.text)))) : el('li', { class: 'empty' }, '수상한 사람을 지목해 보세요!'),
-    );
-    const input = el('input', { class: 'chat-input', maxlength: 100, placeholder: '메시지 보내기 (Enter)', 'aria-label': '채팅 메시지' });
-    const sendIt = async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      const r = await call('chat', { text });
-      if (!r.error) input.value = '';
-    };
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && !e.isComposing && sendIt());
-    body = el('div', { class: 'panel-body chat' }, list, el('div', { class: 'chat-form' }, input, el('button', { class: 'btn small', onclick: sendIt }, '보내기')));
-    requestAnimationFrame(() => (list.scrollTop = list.scrollHeight));
-  } else if (sideTab === 'score') {
-    const list = [...s.players].sort((a, b) => b.score - a.score);
-    body = el(
-      'div',
-      { class: 'panel-body' },
-      el(
-        'table',
-        { class: 'rank-table' },
-        el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, '이름'), el('th', {}, '점수'), el('th', {}, '승'), el('th', {}, '라이어'))),
-        el('tbody', {}, list.map((p, i) => el('tr', { class: p.id === s.me ? 'me' : '' }, el('td', {}, i + 1), el('td', {}, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(p.name) } }, initial(p.name)), p.name), el('td', {}, p.score), el('td', {}, p.wins), el('td', {}, p.liarTimes)))),
-      ),
-    );
-  } else {
-    body = el(
-      'div',
-      { class: 'panel-body' },
-      s.history.length
-        ? el('ol', { class: 'history-list' }, s.history.map((h) => el('li', { class: 'hist-l' }, el('div', {}, el('b', {}, `${h.no}라운드`), ` · ${h.category} · 제시어 「${h.word}」`), el('div', {}, '라이어: ', el('b', {}, h.liars.join(', '))), el('div', {}, el('b', { class: h.winner }, h.winner === 'liar' ? '라이어 승리' : '시민 승리')))))
-        : el('p', { class: 'muted' }, '끝난 라운드가 여기에 쌓여요'),
-    );
-  }
-  $('#sidePanel').replaceChildren(el('div', { class: 'tabs', role: 'tablist' }, tab('chat', '채팅'), tab('score', '점수'), tab('hist', '기록')), body);
+  side.update(s, {
+    score: [
+      JSON.stringify(s.players.map((p) => [p.id, p.name, p.score, p.wins, p.liarTimes])),
+      () => {
+        const list = [...s.players].sort((a, b) => b.score - a.score);
+        return el(
+          'table',
+          { class: 'rank-table' },
+          el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, '이름'), el('th', {}, '점수'), el('th', {}, '승'), el('th', {}, '라이어'))),
+          el('tbody', {}, list.map((p, i) => el('tr', { class: p.id === s.me ? 'me' : '' }, el('td', {}, i + 1), el('td', {}, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(p.name) } }, initial(p.name)), p.name), el('td', {}, p.score), el('td', {}, p.wins), el('td', {}, p.liarTimes)))),
+        );
+      },
+    ],
+    hist: [
+      JSON.stringify(s.history),
+      () =>
+        s.history.length
+          ? el('ol', { class: 'history-list' }, s.history.map((h) => el('li', { class: 'hist-l' }, el('div', {}, el('b', {}, `${h.no}라운드`), ` · ${h.category} · 제시어 「${h.word}」`), el('div', {}, '라이어: ', el('b', {}, h.liars.join(', '))), el('div', {}, el('b', { class: h.winner }, h.winner === 'liar' ? '라이어 승리' : '시민 승리')))))
+          : el('p', { class: 'muted' }, '끝난 라운드가 여기에 쌓여요'),
+    ],
+  });
 }

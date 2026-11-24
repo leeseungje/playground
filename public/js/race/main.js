@@ -3,6 +3,7 @@ import { $, el, fmt, toast, hideToast, session, storage, hueOf, initial } from '
 import { createTrack } from './track.js';
 import { jockeyPortrait, GEARS, GEAR_LABEL } from './sprites.js';
 import { modal } from '../panels.js';
+import { createSidePanel } from '../sidepanel.js';
 import { isMuted, setMuted, play, stopRaceAmbience } from '../sound.js';
 
 // ───────── 플레이어 토큰 (탭마다 다른 플레이어) ─────────
@@ -32,9 +33,6 @@ let picks = [];
 let amount = storage.get('race.amount', 100);
 let quoteOdds = null;
 let quoteKey = '';
-let panelTab = 'chat';
-let lastChatId = null;
-let unread = 0;
 let raceDoneLocally = false;
 let resultShownFor = 0;
 let lastPhase = '';
@@ -577,103 +575,63 @@ function renderSlip() {
   ].filter(Boolean));
 }
 
-// 옆 패널: 채팅 / 경주 기록 / 순위
-let panelSig = '';
+// 옆 패널: 채팅 입력창은 고정, 경주 기록·순위 탭만 바뀔 때 다시 그린다
+const side = createSidePanel($('#racePanel'), { tabs: [['chat', '채팅'], ['history', '경주 기록'], ['rank', '순위']], send, emptyText: '응원 한마디 남겨 보세요!' });
 function renderPanel() {
   const s = state;
-  const box = $('#racePanel');
-  const newest = s.chat.at(-1)?.id ?? 0;
-  if (lastChatId !== null && newest > lastChatId) {
-    if (panelTab !== 'chat') unread += s.chat.filter((m) => m.id > lastChatId && m.pid !== s.me).length;
-    if (s.chat.at(-1).pid !== s.me) play('pop');
-  }
-  lastChatId = newest;
-  const sig = JSON.stringify([panelTab, newest, s.history.map((h) => h.round), s.players.map((p) => [p.name, p.chips, p.net, p.stats.hits]), unread]);
-  if (sig === panelSig) return;
-  panelSig = sig;
-  const tab = (k, t) =>
-    el(
-      'button',
-      {
-        class: `tab${panelTab === k ? ' on' : ''}`,
-        onclick: () => {
-          panelTab = k;
-          if (k === 'chat') unread = 0;
-          renderPanel();
-        },
-      },
-      t,
-      k === 'chat' && unread ? el('span', { class: 'badge' }, String(unread)) : null,
-    );
-  let body;
-  if (panelTab === 'chat') {
-    const list = el(
-      'ol',
-      { class: 'chat-list' },
-      s.chat.length
-        ? s.chat.map((m) => el('li', { class: m.pid === s.me ? 'mine' : '' }, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(m.name) } }, initial(m.name)), el('div', {}, el('div', { class: 'chat-name' }, m.name), el('div', { class: 'chat-text' }, m.text))))
-        : el('li', { class: 'empty' }, '응원 한마디 남겨 보세요!'),
-    );
-    const input = el('input', { class: 'chat-input', maxlength: 100, placeholder: '메시지 보내기 (Enter)', 'aria-label': '채팅 메시지' });
-    const sendIt = async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      const r = await send('chat', { text });
-      if (r.error) return toast(r.error, 'error');
-      input.value = '';
-    };
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && !e.isComposing && sendIt());
-    body = el('div', { class: 'panel-body chat' }, list, el('div', { class: 'chat-form' }, input, el('button', { class: 'btn small', onclick: sendIt }, '보내기')));
-    requestAnimationFrame(() => (list.scrollTop = list.scrollHeight));
-  } else if (panelTab === 'history') {
-    body = el(
-      'div',
-      { class: 'panel-body' },
-      s.history.length
-        ? el(
-            'ol',
-            { class: 'history-list' },
-            s.history.map((h) =>
-              el(
-                'li',
-                { class: 'hist' },
-                el('div', { class: 'hist-head' }, el('b', {}, `제${h.round}경주`), el('span', { class: 'muted' }, `${h.distance}m · ${h.track}`)),
-                el('div', { class: 'hist-podium' }, h.top3.map((x, i) => el('span', {}, el('small', {}, `${i + 1}착`), noBadge(x, 'sm'), x.name))),
-                el('div', { class: 'muted small' }, `단승 ${h.winOdds?.toFixed(1) ?? '-'}배 · 삼쌍승 ${h.trifecta?.toFixed(1) ?? '-'}배 · 적중 마권 ${h.hits}장`),
+  side.update(s, {
+    history: [
+      JSON.stringify(s.history.map((h) => h.round)),
+      () =>
+        s.history.length
+          ? el(
+              'ol',
+              { class: 'history-list' },
+              s.history.map((h) =>
+                el(
+                  'li',
+                  { class: 'hist' },
+                  el('div', { class: 'hist-head' }, el('b', {}, `제${h.round}경주`), el('span', { class: 'muted' }, `${h.distance}m · ${h.track}`)),
+                  el('div', { class: 'hist-podium' }, h.top3.map((x, i) => el('span', {}, el('small', {}, `${i + 1}착`), noBadge(x, 'sm'), x.name))),
+                  el('div', { class: 'muted small' }, `단승 ${h.winOdds?.toFixed(1) ?? '-'}배 · 삼쌍승 ${h.trifecta?.toFixed(1) ?? '-'}배 · 적중 마권 ${h.hits}장`),
+                ),
+              ),
+            )
+          : el('p', { class: 'muted' }, '끝난 경주가 여기에 쌓여요'),
+    ],
+    rank: [
+      JSON.stringify(s.players.map((p) => [p.id, p.name, p.chips, p.inPlay, p.net, p.stats])),
+      () => {
+        const list = [...s.players].sort((a, b) => b.chips + b.inPlay - (a.chips + a.inPlay));
+        const best = [...s.players].sort((a, c) => c.stats.bestPayout - a.stats.bestPayout)[0];
+        return el(
+          'div',
+          {},
+          el(
+            'table',
+            { class: 'rank-table' },
+            el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, '이름'), el('th', {}, '칩'), el('th', {}, '손익'), el('th', { title: '적중 / 산 마권' }, '적중'))),
+            el(
+              'tbody',
+              {},
+              list.map((p, i) =>
+                el(
+                  'tr',
+                  { class: p.id === s.me ? 'me' : '' },
+                  el('td', {}, i + 1),
+                  el('td', {}, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(p.name) } }, initial(p.name)), p.name),
+                  el('td', {}, fmt(p.chips)),
+                  el('td', { class: p.net > 0 ? 'up' : p.net < 0 ? 'down' : '' }, `${p.net > 0 ? '+' : ''}${fmt(p.net)}`),
+                  el('td', {}, `${p.stats.hits}/${p.stats.tickets}`),
+                ),
               ),
             ),
-          )
-        : el('p', { class: 'muted' }, '끝난 경주가 여기에 쌓여요'),
-    );
-  } else {
-    const list = [...s.players].sort((a, b) => b.chips + b.inPlay - (a.chips + a.inPlay));
-    body = el(
-      'div',
-      { class: 'panel-body' },
-      el(
-        'table',
-        { class: 'rank-table' },
-        el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, '이름'), el('th', {}, '칩'), el('th', {}, '손익'), el('th', { title: '적중 / 산 마권' }, '적중'))),
-        el(
-          'tbody',
-          {},
-          list.map((p, i) =>
-            el(
-              'tr',
-              { class: p.id === s.me ? 'me' : '' },
-              el('td', {}, i + 1),
-              el('td', {}, el('span', { class: 'chat-avatar', style: { '--hue': hueOf(p.name) } }, initial(p.name)), p.name),
-              el('td', {}, fmt(p.chips)),
-              el('td', { class: p.net > 0 ? 'up' : p.net < 0 ? 'down' : '' }, `${p.net > 0 ? '+' : ''}${fmt(p.net)}`),
-              el('td', {}, `${p.stats.hits}/${p.stats.tickets}`),
-            ),
           ),
-        ),
-      ),
-      el('div', { class: 'rank-foot muted' }, `최고 적중: ${(() => { const b = [...s.players].sort((a, c) => c.stats.bestPayout - a.stats.bestPayout)[0]; return b?.stats.bestPayout ? `${b.name} ${fmt(b.stats.bestPayout)}칩` : '-'; })()}`),
-    );
-  }
-  box.replaceChildren(el('div', { class: 'tabs', role: 'tablist' }, tab('chat', '채팅'), tab('history', '경주 기록'), tab('rank', '순위')), body);
+          el('div', { class: 'rank-foot muted' }, `최고 적중: ${best?.stats.bestPayout ? `${best.name} ${fmt(best.stats.bestPayout)}칩` : '-'}`),
+        );
+      },
+    ],
+  });
 }
 
 // ───────── 결과 ─────────
