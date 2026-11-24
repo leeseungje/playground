@@ -33,6 +33,11 @@ export function short(n) {
 }
 
 let toastTimer;
+export function hideToast() {
+  clearTimeout(toastTimer);
+  const t = $('#toast');
+  if (t) t.className = 'toast';
+}
 export function toast(msg, kind = '') {
   const t = $('#toast');
   t.textContent = msg;

@@ -145,6 +145,8 @@ export class Room {
       const wasAway = !p.connected;
       p.socketId = socketId;
       p.connected = true;
+      // 토너먼트에서 기권한 뒤(아직 판이 안 끝나 자리에 남아 있을 때) 돌아오면 구경만
+      if (p.leaving && this.tourney.active && p.place != null) p.spectator = true;
       p.leaving = false;
       if (wasAway) this.say(`${p.name}님이 다시 접속했어요.`);
       if (!this.hostConnected()) this.hostId = p.id;
@@ -156,6 +158,8 @@ export class Room {
       // 탭을 닫아 돌아올 수 없는 사람이 자리를 영구히 차지하지 않도록, 판에 앉아 있지 않은 끊긴 사람을 비운다
       for (const x of [...this.players]) {
         if (x.connected || (this.seatOf(x.id) && this.handLive())) continue;
+        // 토너먼트에서 칩을 가진 사람은 끊겨도 아직 대회 참가자라 비우지 않는다
+        if (this.tourney.active && x.chips > 0) continue;
         this.stash(x);
         this.removePlayer(x.id);
         if (this.players.length < this.opt.maxPlayers) break;
@@ -168,14 +172,15 @@ export class Room {
     const base = (name || '').trim().slice(0, 12) || `플레이어${this.seatCounter + 1}`;
     let finalName = base;
     for (let i = 2; this.players.some((x) => x.name === finalName); i++) finalName = `${base}${i}`;
-    // 토너먼트가 진행 중이면 새로 온 사람은 구경만 (칩 0)
-    const lateToTourney = this.tourney.active && !back;
+    // 토너먼트가 진행 중이면 새로 온 사람, 이번 대회에서 기권한 사람은 구경만 (칩 0).
+    // (departed 는 토너먼트 시작 때 비우므로, 여기서 back 은 이번 대회에서 나간 사람뿐이다)
+    const lateToTourney = this.tourney.active && (!back || back.chips === 0);
     p = {
       id: newId(),
       token,
       name: finalName,
-      chips: back ? back.chips : lateToTourney ? 0 : this.settings.startChips,
-      bought: back ? back.bought : lateToTourney ? 0 : this.settings.startChips,
+      chips: lateToTourney ? 0 : back ? back.chips : this.settings.startChips,
+      bought: lateToTourney ? back?.bought ?? 0 : back ? back.bought : this.settings.startChips,
       connected: true,
       socketId,
       rebuys: back ? back.rebuys : 0,
@@ -228,6 +233,14 @@ export class Room {
     p.connected = false;
     p.socketId = null;
     this.say(`${p.name}님이 나갔어요.`);
+    // 토너먼트 중에 나가면 기권: 남은 칩은 몰수하고, 지금 남은 인원 기준으로 순위를 준다.
+    // (폴드로 판이 끝나며 우승 판정이 먼저 일어날 수 있으므로 폴드 처리보다 앞에서 한다)
+    if (this.tourney.active && p.place == null && !p.spectator && (p.chips > 0 || seat)) {
+      p.place = this.tourneyAlive().length + 1;
+      p.chips = 0;
+      this.tourney.places.push({ id: p.id, name: p.name, place: p.place });
+      this.say(`${p.name}님이 기권해서 ${p.place}위가 됐어요.`);
+    }
     if (seat && this.handLive() && !seat.folded) {
       if (this.currentSeat() === seat) {
         this.doAction(seat, 'fold');
@@ -240,13 +253,42 @@ export class Room {
     }
     if (!this.seatOf(playerId) || !this.handLive()) this.removePlayer(playerId);
     if (this.hostId === playerId) this.pickNewHost();
+    if (!this.handLive()) this.checkTourneyEnd();
     this.changed();
   }
 
   removePlayer(id) {
     const p = this.player(id);
     if (p && p.leaving) this.stash(p);
+    this.lastChatAt.delete(id);
     this.players = this.players.filter((x) => x.id !== id);
+  }
+
+  /** 토너먼트에서 아직 살아 있는 사람 (칩 있음, 나가지 않음, 순위 없음) */
+  tourneyAlive() {
+    return this.players.filter((p) => p.chips > 0 && !p.leaving && p.place == null);
+  }
+
+  /** 살아 있는 사람이 1명 이하면 우승을 확정한다. 판이 진행 중이면 판이 끝난 뒤(endHand)에 다시 확인한다 */
+  checkTourneyEnd() {
+    if (!this.tourney.active || this.handLive()) return false;
+    const alive = this.tourneyAlive();
+    if (alive.length > 1) return false;
+    const champ = alive[0] ?? null;
+    if (champ) {
+      champ.place = 1;
+      this.tourney.places.push({ id: champ.id, name: champ.name, place: 1 });
+    }
+    this.tourney.active = false;
+    this.tourney.winnerId = champ?.id ?? null;
+    this.tourney.winnerName = champ?.name ?? null;
+    this.running = false;
+    this.clearFlowTimer();
+    // 끝난 뒤에는 방 설정의 블라인드로 돌려 놓는다 (마지막 레벨이 남지 않게)
+    this.blinds = [Math.floor(this.settings.bigBlind / 2), this.settings.bigBlind];
+    this.say(champ ? `🏆 토너먼트 우승은 ${champ.name}님! 축하합니다!` : '토너먼트가 끝났어요.');
+    this.emit('tourneyEnd', { winnerId: champ?.id ?? null });
+    return true;
   }
 
   rebuy(playerId) {
@@ -271,7 +313,8 @@ export class Room {
   sendChat(playerId, text) {
     const p = this.player(playerId);
     if (!p) return { error: '플레이어를 찾을 수 없어요' };
-    const clean = typeof text === 'string' ? text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 100) : '';
+    // 이모지 같은 서로게이트 쌍이 반으로 잘리지 않게 글자 단위로 자른다
+    const clean = typeof text === 'string' ? Array.from(text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, 100).join('') : '';
     if (!clean) return { error: '메시지가 비어 있어요' };
     const now = this.now();
     if (now - (this.lastChatAt.get(playerId) ?? -Infinity) < 600) return { error: '조금 천천히 보내 주세요' };
@@ -312,9 +355,19 @@ export class Room {
       if (patch.mode !== 'cash' && patch.mode !== 'tournament') return { error: '알 수 없는 모드예요' };
       s.mode = patch.mode;
     }
+    if (s.mode !== this.settings.mode && this.running) return { error: '게임을 멈춘 뒤에 모드를 바꿀 수 있어요' };
+    if (s.bigBlind % 2 === 1 && s.bigBlind > 2) s.bigBlind += 1; // 스몰블라인드가 딱 절반이 되도록 (검사 전에 맞춘다)
     if (s.bigBlind * 10 > s.startChips) return { error: '시작 칩은 빅블라인드의 10배 이상이어야 해요' };
-    if (s.bigBlind % 2 === 1 && s.bigBlind > 2) s.bigBlind += 1; // 스몰블라인드가 딱 절반이 되도록
     const startChanged = s.startChips !== this.settings.startChips;
+    // 자유 게임으로 돌아가면 지난 토너먼트의 순위·구경 표시를 지운다
+    if (s.mode === 'cash' && this.settings.mode === 'tournament') {
+      for (const p of this.players) {
+        p.place = null;
+        p.spectator = false;
+      }
+      this.tourney = { active: false, hands: 0, level: 0, winnerId: null, winnerName: null, places: [] };
+    }
+    if (startChanged && this.handNo === 0) this.departed.clear();
     this.settings = s;
     this.blinds = [Math.floor(s.bigBlind / 2), s.bigBlind];
     // 아직 한 판도 안 했으면 모두의 칩을 새 시작 칩으로 맞춘다
@@ -354,6 +407,8 @@ export class Room {
   startTourney() {
     const s = this.settings;
     for (const p of [...this.players]) if (p.leaving) this.removePlayer(p.id);
+    // 지난 게임에서 나간 사람의 칩·순위를 들고 들어오지 못하게 비운다
+    this.departed.clear();
     for (const p of this.players) {
       const inIt = p.connected;
       p.chips = inIt ? s.startChips : 0;
@@ -391,7 +446,8 @@ export class Room {
   // ───────── 한 판 진행 ─────────
 
   eligible() {
-    return this.players.filter((p) => p.chips > 0 && p.connected && !p.leaving);
+    // 토너먼트에서는 끊긴 사람도 자리에 앉혀 자동 체크/폴드로 블라인드를 내게 한다 (안 그러면 대회가 끝나지 않는다)
+    return this.players.filter((p) => p.chips > 0 && !p.leaving && (p.connected || this.tourney.active));
   }
 
   seatOf(playerId) {
@@ -413,6 +469,7 @@ export class Room {
 
     const seatsP = this.eligible();
     if (seatsP.length < 2) {
+      if (this.checkTourneyEnd()) return;
       this.running = false;
       this.say('칩이 있는 접속자가 2명 이상 있어야 다음 판을 시작할 수 있어요.');
       return;
@@ -752,6 +809,7 @@ export class Room {
       type: 'fold',
       pots: [{ amount: pot, winners: [winner.id] }],
       payouts: { [winner.id]: pot },
+      returns: {},
       hands: {},
     };
     this.say(`모두 폴드해서 ${winner.p.name}님이 ${pot.toLocaleString('ko-KR')}을 가져갑니다.`);
@@ -790,8 +848,16 @@ export class Room {
     const n = h.seats.length;
     const order = (s) => (h.seats.indexOf(s) - h.buttonIdx - 1 + n) % n;
     const payouts = {};
+    const returns = {}; // 아무도 받지 않은 베팅(혼자만 걸린 팟)은 '이긴 것'이 아니라 돌려받은 것
     const potResults = [];
     for (const pot of pots) {
+      if (pot.eligible.length === 1) {
+        const only = pot.eligible[0];
+        only.p.chips += pot.amount;
+        returns[only.id] = (returns[only.id] || 0) + pot.amount;
+        potResults.push({ amount: pot.amount, winners: [only.id], returned: true });
+        continue;
+      }
       let top = null;
       let winners = [];
       for (const s of pot.eligible) {
@@ -815,7 +881,7 @@ export class Room {
 
     const hands = {};
     for (const [id, b] of best) hands[id] = { name: b.name, detail: handDetail(b.score), cards: b.cards };
-    h.results = { type: 'showdown', pots: potResults, payouts, hands };
+    h.results = { type: 'showdown', pots: potResults, payouts, returns, hands };
 
     const msg = Object.entries(payouts)
       .map(([id, amt]) => `${this.player(id)?.name ?? '?'}님 ${hands[id].detail}로 ${amt.toLocaleString('ko-KR')}`)
@@ -842,7 +908,7 @@ export class Room {
       p.stats.wins++;
       p.stats.biggestPot = Math.max(p.stats.biggestPot, amt);
     }
-    this.emit('win', { payouts: r.payouts, kind: r.type });
+    this.emit('win', { payouts: r.payouts, returns: r.returns ?? {}, kind: r.type });
 
     // 판 기록 (공개된 정보만)
     this.history.unshift({
@@ -852,6 +918,7 @@ export class Room {
       pot: h.seats.reduce((a, s) => a + s.total, 0),
       type: r.type,
       winners: Object.entries(r.payouts).map(([id, amount]) => ({ id, name: this.player(id)?.name ?? '?', amount, hand: r.hands[id]?.detail ?? null })),
+      returned: Object.entries(r.returns ?? {}).map(([id, amount]) => ({ id, name: this.player(id)?.name ?? '?', amount })),
       shown: [...h.revealed].map((id) => {
         const s = this.seatOf(id);
         return { id, name: s.p.name, cards: s.hole, hand: r.hands[id]?.detail ?? null };
@@ -862,30 +929,18 @@ export class Room {
 
     // 토너먼트 탈락·우승
     if (this.tourney.active) {
-      const busted = h.seats.filter((s) => s.p.chips === 0 && s.p.place == null).sort((a, b) => b.startChips - a.startChips);
-      const stillIn = () => this.players.filter((p) => p.chips > 0).length;
-      const remaining = stillIn();
+      // 같은 판에서 여럿이 탈락하면 판 시작 때 칩이 적었던 사람이 더 낮은 순위 (기권한 사람은 이미 순위가 있음)
+      const busted = h.seats.filter((s) => s.p.chips === 0 && s.p.place == null && !s.p.leaving).sort((a, b) => a.startChips - b.startChips);
+      const remaining = this.tourneyAlive().length;
       busted.forEach((s, i) => {
         s.p.place = remaining + busted.length - i;
         this.tourney.places.push({ id: s.id, name: s.p.name, place: s.p.place });
       });
       if (busted.length) this.say(`${busted.map((s) => `${s.p.name}님 ${s.p.place}위`).join(', ')}로 탈락했어요.`);
-      if (remaining <= 1) {
-        const champ = this.players.find((p) => p.chips > 0) ?? h.seats.find((s) => r.payouts[s.id])?.p;
-        if (champ) {
-          champ.place = 1;
-          this.tourney.places.push({ id: champ.id, name: champ.name, place: 1 });
-        }
-        this.tourney.active = false;
-        this.tourney.winnerId = champ?.id ?? null;
-        this.tourney.winnerName = champ?.name ?? null;
-        this.running = false;
-        this.say(`🏆 토너먼트 우승은 ${champ?.name ?? '?'}님! 축하합니다!`);
-        this.emit('tourneyEnd', { winnerId: champ?.id ?? null });
-      }
     }
 
     for (const p of [...this.players]) if (p.leaving) this.removePlayer(p.id);
+    this.checkTourneyEnd();
     if (!this.hostConnected()) this.pickNewHost();
     if (this.running) {
       this.later(this.opt.nextHandMs, () => {

@@ -65,10 +65,12 @@ export function createPanels(root, { send }) {
       tabBtns.get('chat').querySelector('.badge').textContent = '';
       chatList.scrollTop = chatList.scrollHeight;
     }
+    // 숨겨져 있을 때는 스크롤 위치를 정할 수 없으므로 보이게 된 뒤 맨 아래로
+    if (k === 'log') logList.scrollTop = logList.scrollHeight;
   }
   select('chat');
 
-  let lastChatId = 0;
+  let lastChatId = null; // null: 아직 처음 상태를 받지 않음 (입장 전 대화는 안 읽음으로 세지 않음)
   let emojiSig = '';
   function renderChat() {
     const items = state.chat;
@@ -86,8 +88,8 @@ export function createPanels(root, { send }) {
         ),
       );
       if (atBottom || items.at(-1)?.pid === state.me) chatList.scrollTop = chatList.scrollHeight;
-      if (tab !== 'chat' && lastChatId) {
-        unread += items.filter((m) => m.id > lastChatId).length;
+      if (tab !== 'chat' && lastChatId !== null) {
+        unread += items.filter((m) => m.id > lastChatId && m.pid !== state.me).length;
         tabBtns.get('chat').querySelector('.badge').textContent = unread ? String(unread) : '';
       }
       lastChatId = newest;
@@ -124,6 +126,7 @@ export function createPanels(root, { send }) {
             'div',
             { class: 'hist-win' },
             h.winners.map((w) => el('div', {}, '🏆 ', el('b', {}, w.name), ` +${fmt(w.amount)}`, w.hand ? el('span', { class: 'muted' }, ` · ${w.hand}`) : null)),
+            (h.returned ?? []).map((r) => el('div', { class: 'muted' }, `↩ ${r.name} ${fmt(r.amount)} 반환 (아무도 받지 않은 베팅)`)),
           ),
           h.shown.length
             ? el(
@@ -274,13 +277,15 @@ export function modal(title, body) {
   back.addEventListener('pointerdown', (e) => e.target === back && close());
   window.addEventListener('keydown', onKey, true);
   document.body.append(back);
-  setTimeout(() => box.querySelector('input:not([disabled]), button')?.focus(), 30);
+  setTimeout(() => (box.querySelector('input:not([disabled])') ?? box.querySelector('button'))?.focus(), 30);
   return { close };
 }
 
 /** 토너먼트 우승 축하 (색종이) */
 export function celebrate(name, isMe) {
   play('fanfare');
+  // 승자 배너와 겹치지 않게 내린다
+  document.querySelector('.banner')?.classList.remove('show');
   const canvas = el('canvas', { class: 'confetti' });
   const card = el('div', { class: 'champ' }, el('div', { class: 'trophy' }, '🏆'), el('div', { class: 'champ-title' }, isMe ? '우승을 축하해요!' : '토너먼트 우승'), el('div', { class: 'champ-name' }, name));
   const wrap = el('div', { class: 'celebrate', onclick: () => end() }, canvas, card);

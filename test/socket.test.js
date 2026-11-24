@@ -101,7 +101,7 @@ test('소켓: 방 만들기·입장·한 판 진행, 남의 패는 네트워크�
 
   // 모두 콜/체크로 끝까지
   const start = last(a).hand.no;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 120; i++) {
     const st = last(a);
     if (st.hand.no !== start || st.hand.street === 'done') break;
     if (!st.hand.toActId) {
@@ -121,7 +121,8 @@ test('소켓: 방 만들기·입장·한 판 진행, 남의 패는 네트워크�
   const total = last(a).players.reduce((x, p) => x + p.chips, 0);
   assert.equal(total, 3000);
   assert.equal(last(a).hand.results.type, 'showdown');
-  // 쇼다운이면 모두의 패가 공개됨
+  // 쇼다운이면 모두의 패가 공개됨 (b 화면에도 마지막 상태가 도착할 때까지 기다린다)
+  await until(() => last(b).hand.street === 'done' && last(b).players.every((p) => p.cards && p.cards[0] !== 'back'), 5000);
   for (const p of last(b).players) assert.ok(p.cards[0] !== 'back');
   void ids;
 

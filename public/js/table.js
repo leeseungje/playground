@@ -40,10 +40,12 @@ function portraitLayout(H) {
     rail: [238, ry],
     seat: [204, ry + 30],
     me: [280, H - 56],
-    board: [280, cy - 10],
-    pot: [280, cy - 94],
+    // 보드는 옆 좌석 두 줄(약 cy-108, cy+61) 사이 빈 줄에, 팟은 그 위 가운데 빈 칸에 둔다
+    board: [280, cy - 23],
+    pot: [280, cy - 103],
     dealer: [280, 50],
     gap: 44,
+    bottomGap: 52, // 내 카드(큰 카드)와 옆 사람이 겹치지 않게 아래쪽을 비운다
   };
 }
 
@@ -62,8 +64,11 @@ function seatPoints(n, L) {
   else {
     const left = Math.ceil(others / 2);
     const right = others - left;
-    for (let i = 1; i <= left; i++) deg.push(90 + (span * i) / left);
-    for (let i = right; i >= 1; i--) deg.push(450 - (span * i) / right);
+    const bg = L.bottomGap;
+    // bottomGap 이 있으면 [90+bg, 270-gap] 구간에 고르게, 없으면 기존처럼 맨 아래부터 균등 분배
+    const at = (i, k) => (bg == null ? (span * i) / k : bg + (span - bg) * (k === 1 ? 1 : (i - 1) / (k - 1)));
+    for (let i = 1; i <= left; i++) deg.push(90 + at(i, left));
+    for (let i = right; i >= 1; i--) deg.push(450 - at(i, right));
   }
   for (const d of deg) {
     const a = (d * Math.PI) / 180;
@@ -195,11 +200,13 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
       const isMe = p.id === state.me;
       s.root.classList.toggle('me', isMe);
       s.root.dataset.side = isMe ? 'me' : Math.abs(u[1]) > 0.55 ? (u[1] > 0 ? 'top' : 'bottom') : u[0] > 0 ? 'left' : 'right';
-      // 옆자리는 명패(가로 200px)에 가리지 않게 가로로 더 들어가게
+      // 가로 화면: 카드를 명패(200x64)와 겹치지 않을 만큼 안쪽으로.
+      // 세로 화면: 보드와 부딪히지 않게 카드를 명패 바로 위에 작게 둔다
       const compact = mode === 'portrait';
-      const cardOff = isMe ? [0, compact ? -100 : -108] : [u[0] * (compact ? 96 : 128), u[1] * (compact ? 58 : 66)];
+      const cardOff = isMe ? [0, compact ? -100 : -108] : compact ? [0, -54] : [u[0] * 142, u[1] * 84];
+      s.root.dataset.cards = isMe ? 'up' : compact ? 'up' : u[1] > 0.55 ? 'down' : 'side';
       s.cards.style.transform = `translate(calc(-50% + ${cardOff[0]}px), calc(-50% + ${cardOff[1]}px))`;
-      s.betPos = isMe ? [pos[0], pos[1] - (compact ? 196 : 218)] : lerp(pos, center, compact ? 0.45 : 0.42);
+      s.betPos = isMe ? [pos[0], pos[1] - (compact ? 196 : 218)] : lerp(pos, center, compact ? 0.32 : 0.42);
       place(s.bet, s.betPos);
       if (instant) requestAnimationFrame(() => s.root.classList.remove('no-move'));
     });
@@ -282,14 +289,19 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
         for (let i = 0; i < count; i++) hold(boardEls[start + i], 420 + i * 160 + 120);
       }
     }
-    // 쇼다운·올인 공개: 좌석마다 조금씩 늦게 뒤집기
+    // 쇼다운·올인 공개: 좌석마다 조금씩 늦게 뒤집기 (사람이 많으면 간격을 줄인다)
     let k = 0;
+    const revealing = state.players.filter((p) => {
+      const before = prev?.players.find((x) => x.id === p.id);
+      return p.id !== state.me && p.cards && before?.cards && before.cards[0] === 'back' && p.cards[0] !== 'back';
+    }).length;
+    const step = revealing > 1 ? Math.min(380, 1500 / (revealing - 1)) : 0;
     for (const p of state.players) {
       const s = seats.get(p.id);
       const before = prev?.players.find((x) => x.id === p.id);
       if (!s || p.id === state.me || !p.cards || !before?.cards) continue;
       if (before.cards[0] === 'back' && p.cards[0] !== 'back' && state.hand?.no === prev?.hand?.no) {
-        s.cardEls.forEach((c) => hold(c, 250 + k * 380));
+        s.cardEls.forEach((c) => hold(c, 250 + k * step));
         k++;
       }
     }
@@ -391,12 +403,18 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
               i++;
             }
           }
-          const delay = results?.type === 'showdown' ? 1400 : 500;
+          // 쇼다운이면 마지막 사람 카드가 다 뒤집힌 뒤에 승자를 알린다
+          const revealLeft = holds.size ? Math.max(...holds.values()) - performance.now() : 0;
+          const delay = results?.type === 'showdown' ? Math.max(1100, revealLeft + 650) : 500;
+          winDelay = delay;
           potHold = { until: performance.now() + delay, value: state.hand?.pot ?? 0 };
           renderPot();
           setTimeout(renderPot, delay + 10);
-          // 승자 칩 숫자는 칩이 도착할 때 올린다
-          winHold = { until: performance.now() + delay + 700 + payouts.length * 120, payouts: e.payouts || {} };
+          // 승자·반환 칩 숫자는 칩이 도착할 때 올린다
+          const returns = Object.entries(e.returns || {});
+          const held = { ...(e.payouts || {}) };
+          for (const [id, amt] of returns) held[id] = (held[id] || 0) + amt;
+          winHold = { until: performance.now() + delay + 700 + (payouts.length + returns.length) * 120, payouts: held };
           renderChips();
           setTimeout(renderChips, winHold.until - performance.now() + 10);
           payouts.forEach(([id, amt], j) => {
@@ -410,6 +428,12 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
               w.root.append(plus);
               setTimeout(() => plus.remove(), 2600);
             }, delay + j * 120);
+          });
+          // 아무도 받지 않아 돌려주는 칩: 승리 표시 없이 칩만 돌아간다
+          returns.forEach(([id, amt], j) => {
+            const w = seats.get(id);
+            if (!w) return;
+            setTimeout(() => fly(flyingChips(amt), L.pot, w.pos, { duration: 600, arc: 30 }), delay + (payouts.length + j) * 120);
           });
           const iWon = winnerIds.includes(state.me);
           setTimeout(() => play(iWon ? 'win' : 'pot'), delay);
@@ -445,8 +469,9 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
   }
 
   let bannerTimer = null;
+  let winDelay = 0;
   function showBanner({ text, cls }) {
-    const delay = cls === 'win' && state.hand?.results?.type === 'showdown' ? 1300 : 300;
+    const delay = cls === 'win' ? Math.max(300, winDelay - 100) : 300;
     setTimeout(() => {
       banner.textContent = text;
       banner.className = `banner show ${cls}`;
@@ -609,12 +634,11 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
     if (h) {
       const b = seats.get(h.buttonId);
       if (b) {
-        const center = [L.cx, L.cy];
-        const v = [center[0] - b.pos[0], center[1] - b.pos[1]];
-        const len = Math.hypot(...v) || 1;
-        const perp = [-v[1] / len, v[0] / len];
-        const base = lerp(b.pos, center, b.root.classList.contains('me') ? 0.25 : 0.27);
-        place(dealerBtn, [base[0] + perp[0] * 78, base[1] + perp[1] * 78]);
+        // 버튼 주인의 아바타 왼쪽 아래 모서리에 붙인다 (카드·칩·꼬리표와 겹치지 않는 자리)
+        const isMe = b.root.classList.contains('me');
+        const halfW = mode === 'portrait' ? (isMe ? 95 : 75) : 100;
+        const dy = mode === 'portrait' ? (isMe ? 24 : 20) : 24;
+        place(dealerBtn, [b.pos[0] - halfW + 6, b.pos[1] + dy]);
         dealerBtn.classList.add('show');
       }
     } else dealerBtn.classList.remove('show');

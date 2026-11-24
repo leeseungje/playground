@@ -406,3 +406,156 @@ test('이벤트: 데이터가 이벤트 종류(type)를 덮어쓰지 않음', ()
   for (const e of room.events) assert.ok(['join', 'deal', 'turn', 'action', 'collect', 'street', 'win', 'reveal', 'blinds', 'settings', 'rebuy', 'tourneyStart', 'tourneyEnd'].includes(e.type), `알 수 없는 이벤트 ${e.type}`);
   void clock;
 });
+
+// ───────── 2차 검토에서 재현된 토너먼트 문제 회귀 테스트 ─────────
+
+function tourney(n, chips = 500, extra = {}) {
+  const clock = fakeClock();
+  const room = new Room('TT', { schedule: clock.schedule });
+  const ps = [];
+  for (let i = 0; i < n; i++) ps.push(room.join({ token: `tt-${i}-xxxxxxxxxxxxxxx`, name: `T${i}`, socketId: `t${i}` }).player);
+  assert.equal(room.updateSettings(ps[0].id, { mode: 'tournament', startChips: chips, bigBlind: 20, blindUpHands: 3, ...extra }).error, undefined);
+  assert.equal(room.start(ps[0].id).error, undefined);
+  return { room, clock, ps };
+}
+const runUntil = (room, clock, pred, act = (s) => room.act(s.id, room.options(s).canCheck ? 'check' : 'call')) => {
+  for (let k = 0; k < 50_000 && !pred(); k++) {
+    if (room.currentSeat()) act(room.currentSeat());
+    else if (!clock.step()) break;
+  }
+};
+
+test('토너먼트: 판 도중 나가면 기권 처리되고 남은 1명이 우승', () => {
+  const { room, clock, ps } = tourney(2);
+  const other = room.hand.seats.find((s) => s !== room.currentSeat()).p;
+  room.leave(other.id);
+  runUntil(room, clock, () => !room.tourney.active);
+  assert.equal(room.tourney.active, false);
+  assert.ok(room.tourney.winnerId);
+  assert.notEqual(room.tourney.winnerId, other.id);
+  assert.deepEqual(room.tourney.places.map((x) => x.place).sort(), [1, 2]);
+});
+
+test('토너먼트: 판 사이에 나가도 우승이 확정됨', () => {
+  const { room, clock, ps } = tourney(2);
+  room.act(room.currentSeat().id, 'fold');
+  assert.equal(room.hand.street, 'done');
+  room.leave(ps[1].id);
+  assert.equal(room.tourney.active, false);
+  assert.equal(room.tourney.winnerId, ps[0].id);
+  assert.equal(clock.step(), false, '끝난 뒤 다음 판 예약이 남으면 안 됨');
+});
+
+test('토너먼트: 칩을 가진 채 끊긴 사람도 블라인드를 내며 결국 끝남', () => {
+  const { room, clock, ps } = tourney(3, 300);
+  room.disconnect(ps[2].socketId);
+  // 남은 둘은 계속 올인, 끊긴 사람은 시간 초과로 자동 처리
+  runUntil(room, clock, () => !room.tourney.active, (s) => room.act(s.id, room.options(s).canRaise ? 'allin' : room.options(s).canCheck ? 'check' : 'call'));
+  assert.equal(room.tourney.active, false, '토너먼트가 끝나지 않음');
+  assert.deepEqual(room.tourney.places.map((x) => x.place).sort(), [1, 2, 3]);
+});
+
+test('토너먼트: 지난 게임에서 나간 사람은 칩·순위를 들고 들어올 수 없음', () => {
+  const { room, ps } = setup(3);
+  ps[2].chips = 5000;
+  const token = ps[2].token;
+  room.leave(ps[2].id);
+  room.updateSettings(ps[0].id, { mode: 'tournament' });
+  room.start(ps[0].id);
+  const back = room.join({ token, name: 'P2', socketId: 'b' }).player;
+  assert.equal(back.chips, 0);
+  assert.equal(back.spectator, true);
+});
+
+test('토너먼트: 기권한 사람이 다시 들어오면 구경만', () => {
+  const { room, ps } = tourney(3);
+  const token = ps[2].token;
+  room.leave(ps[2].id);
+  const back = room.join({ token, name: 'T2', socketId: 'b' }).player;
+  assert.equal(back.chips, 0);
+  assert.equal(back.spectator, true);
+  assert.ok(back.place);
+});
+
+test('토너먼트: 같은 판에서 여럿 탈락하면 칩이 적었던 사람이 더 낮은 순위', () => {
+  const { room, clock, ps } = tourney(3, 2000);
+  // 첫 판을 끝내고 칩을 맞춘 뒤 다음 판에서 모두 올인
+  runUntil(room, clock, () => room.hand.street === 'done', (s) => room.act(s.id, 'fold'));
+  ps[0].chips = 2000;
+  ps[1].chips = 300;
+  ps[2].chips = 700;
+  clock.step(); // 다음 판
+  const h = room.hand;
+  h.seats.find((s) => s.id === ps[0].id).hole = [{ r: 14, s: 's' }, { r: 14, s: 'h' }];
+  h.seats.find((s) => s.id === ps[1].id).hole = [{ r: 2, s: 'c' }, { r: 7, s: 'd' }];
+  h.seats.find((s) => s.id === ps[2].id).hole = [{ r: 3, s: 'c' }, { r: 8, s: 'd' }];
+  h.deck = [{ r: 4, s: 'd' }, { r: 9, s: 'c' }, { r: 10, s: 'h' }, { r: 12, s: 'c' }, { r: 13, s: 'd' }, { r: 5, s: 'h' }, { r: 6, s: 'c' }, { r: 11, s: 's' }];
+  runUntil(room, clock, () => room.hand.street === 'done', (s) => room.act(s.id, 'allin'));
+  assert.equal(ps[1].place, 3, '칩 300이던 사람이 3위');
+  assert.equal(ps[2].place, 2, '칩 700이던 사람이 2위');
+  assert.equal(room.tourney.winnerId, ps[0].id);
+});
+
+test('토너먼트: 칩을 가진 채 나간 사람도 순위에 들어감', () => {
+  const { room, clock, ps } = tourney(4, 300);
+  runUntil(room, clock, () => room.hand.street === 'done', (s) => room.act(s.id, 'fold'));
+  room.leave(ps[3].id);
+  assert.equal(ps[3].place, 4);
+  runUntil(room, clock, () => !room.tourney.active, (s) => room.act(s.id, room.options(s).canRaise ? 'allin' : 'call'));
+  assert.deepEqual(room.tourney.places.map((x) => x.place).sort(), [1, 2, 3, 4]);
+});
+
+test('설정: 게임이 돌아가는 중에는 모드를 바꿀 수 없음', () => {
+  const { room, ps } = setup(2);
+  room.start(ps[0].id);
+  room.act(room.currentSeat().id, 'fold');
+  assert.ok(room.updateSettings(ps[0].id, { mode: 'tournament' }).error);
+  room.pause(ps[0].id);
+  assert.equal(room.updateSettings(ps[0].id, { mode: 'tournament' }).error, undefined);
+});
+
+test('설정: 빅블라인드 홀수 올림 후에도 시작 칩 ≥ 빅블라인드×10', () => {
+  const { room, ps } = setup(2);
+  assert.ok(room.updateSettings(ps[0].id, { startChips: 110, bigBlind: 11 }).error);
+});
+
+test('채팅: 이모지가 반으로 잘리지 않음', () => {
+  let t = 0;
+  const room = new Room('E', { schedule: () => () => {}, now: () => (t += 1000) });
+  const a = room.join({ token: 'emoji-a-xxxxxxxxxxxxx', name: 'A', socketId: 'a' }).player;
+  room.sendChat(a.id, '😀'.repeat(150));
+  assert.equal(Array.from(room.chat.at(-1).text).length, 100);
+  assert.ok(!/[\uD800-\uDBFF]$/.test(room.chat.at(-1).text));
+});
+
+test('혼자만 걸린 팟은 승리가 아니라 반환으로 기록', () => {
+  const { room, clock, ps } = setup(3, [100, 1000, 300]);
+  room.start(ps[0].id);
+  const h = room.hand;
+  const find = (id) => h.seats.find((s) => s.id === id);
+  find(ps[0].id).hole = [{ r: 14, s: 's' }, { r: 14, s: 'h' }];
+  find(ps[1].id).hole = [{ r: 13, s: 's' }, { r: 13, s: 'h' }];
+  find(ps[2].id).hole = [{ r: 2, s: 'c' }, { r: 7, s: 'd' }];
+  h.deck = [{ r: 3, s: 'd' }, { r: 4, s: 'c' }, { r: 9, s: 'h' }, { r: 10, s: 'c' }, { r: 12, s: 'd' }, { r: 5, s: 'h' }, { r: 6, s: 'c' }, { r: 8, s: 's' }];
+  while (room.currentSeat()) room.act(room.currentSeat().id, 'allin');
+  while (h.street !== 'done') assert.ok(clock.step());
+  // P1(1000)이 P2(300)보다 더 낸 700은 아무도 못 받으므로 반환
+  assert.equal(h.results.returns[ps[1].id], 700);
+  assert.ok(!(ps[1].id in h.results.payouts) || h.results.payouts[ps[1].id] > 0);
+  const win = room.events.find((e) => e.type === 'win');
+  assert.equal(win.returns[ps[1].id], 700);
+  assert.equal(room.history[0].returned[0].amount, 700);
+  assert.equal(ps[0].chips + ps[1].chips + ps[2].chips, 1400);
+});
+
+test('토너먼트가 끝나면 블라인드가 방 설정으로 돌아가고, 자유 게임으로 바꾸면 순위가 지워짐', () => {
+  const { room, ps } = tourney(2);
+  room.act(room.currentSeat().id, 'fold');
+  room.leave(ps[1].id);
+  assert.equal(room.tourney.active, false);
+  assert.deepEqual(room.blinds, [10, 20]);
+  assert.equal(ps[0].place, 1);
+  assert.equal(room.updateSettings(ps[0].id, { mode: 'cash' }).error, undefined);
+  assert.equal(ps[0].place, null);
+  assert.equal(room.viewFor(ps[0].id).tourney.winnerName, null);
+});

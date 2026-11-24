@@ -1,5 +1,5 @@
 // 하단 행동 영역: 내 족보, 폴드/체크/콜/레이즈, 미리 선택, 단축키
-import { el, fmt, toast } from './util.js';
+import { el, fmt, toast, hideToast } from './util.js';
 import { miniCard } from './cards.js';
 import { play } from './sound.js';
 
@@ -13,6 +13,7 @@ export function createActions(root, { send }) {
   let raiseKey = '';
   let busy = false;
   let allinArmedAt = 0;
+  let foldKeyArmedAt = 0;
   let autoTimer = null;
 
   const info = el('div', { class: 'my-hand' });
@@ -23,6 +24,7 @@ export function createActions(root, { send }) {
     if (busy) return;
     busy = true;
     pre = null;
+    hideToast(); // '한 번 더 누르세요' 같은 지난 안내는 지운다
     const r = await send('action', { type, amount });
     busy = false;
     if (r.error) toast(r.error, 'error');
@@ -43,16 +45,48 @@ export function createActions(root, { send }) {
     return list.map(([t, v]) => [t, clamp(v)]);
   }
 
+  // 테이블의 딜·보드 공개 연출이 끝나기 전에는 아래쪽에 먼저 보여 주지 않는다
+  let seenHandNo = null;
+  let prevBoardLen = 0;
+  let seenBoard = 0;
+  let infoHoldUntil = 0;
+  let infoTimer = null;
+  function holdInfo(ms) {
+    infoHoldUntil = Math.max(infoHoldUntil, performance.now() + ms);
+    clearTimeout(infoTimer);
+    infoTimer = setTimeout(() => state && renderInfo(), infoHoldUntil - performance.now() + 20);
+  }
+
   function renderInfo() {
     const p = me();
     const h = state.hand;
+    if (h && h.no !== seenHandNo) {
+      if (seenHandNo !== null) holdInfo(state.players.filter((x) => x.dealtIn).length * 180 + 640);
+      seenHandNo = h.no;
+      seenBoard = 0;
+      prevBoardLen = 0;
+    }
+    const boardLen = h?.board?.length ?? 0;
+    if (boardLen > seenBoard) {
+      holdInfo(620);
+      seenBoard = boardLen;
+    }
+    const holding = performance.now() < infoHoldUntil;
+    if (holding && h && h.street !== 'done' && boardLen === 0) {
+      info.replaceChildren(el('div', { class: 'mh-label' }, '내 패'), el('div', { class: 'mh-none' }, '카드를 받는 중…'));
+      return;
+    }
     const cards = p?.cards && p.cards[0] !== 'back' ? p.cards : null;
     if (!cards || !h) {
       info.replaceChildren(el('div', { class: 'mh-label' }, '내 패'), el('div', { class: 'mh-none' }, p?.spectator ? '구경 중이에요' : '아직 받은 카드가 없어요'));
       return;
     }
-    const all = [...cards, ...(h.board || [])];
-    const cur = currentHand ? currentHand(all) : null;
+    // 보드 카드가 뒤집히는 중이면 이전 보드까지만으로 족보를 계산한다
+    const shownBoard = (h.board || []).slice(0, holding ? prevBoardLen : (h.board || []).length);
+    if (!holding) prevBoardLen = (h.board || []).length;
+    const all = [...cards, ...shownBoard];
+    // 폴드한 뒤에는 족보를 보여 주지 않는다
+    const cur = currentHand && !p.folded ? currentHand(all) : null;
     // replaceChildren 에 null 을 넘기면 "null" 글자가 들어가므로 걸러 낸다
     info.replaceChildren(
       ...[
@@ -100,7 +134,9 @@ export function createActions(root, { send }) {
         range.style.setProperty('--pct', `${pct}%`);
         go.querySelector('b').textContent = raiseTo >= a.maxTo ? `올인 ${fmt(raiseTo)}` : `${label} ${fmt(raiseTo)}`;
         go.classList.toggle('allin', raiseTo >= a.maxTo);
-        presets.forEach(([btn, v2]) => btn.classList.toggle('on', v2 === raiseTo));
+        // 같은 금액의 프리셋이 여럿이면 첫 번째만 켠다
+        const firstOn = presets.findIndex(([, v2]) => v2 === raiseTo);
+        presets.forEach(([btn], i) => btn.classList.toggle('on', i === firstOn));
       };
       range.addEventListener('input', () => set(range.value));
       num.addEventListener('change', () => set(num.value));
@@ -233,13 +269,18 @@ export function createActions(root, { send }) {
   // 단축키
   window.addEventListener('keydown', (e) => {
     if (!state?.actions || e.ctrlKey || e.metaKey || e.altKey) return;
-    const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+    const ae = document.activeElement;
+    // 글자를 입력하는 칸에서는 단축키를 쓰지 않는다 (슬라이더는 예외)
+    const typing = (ae?.tagName === 'INPUT' && ae.type !== 'range') || ae?.tagName === 'TEXTAREA' || ae?.isContentEditable;
+    if (typing) return;
     const a = state.actions;
     const k = e.key.toLowerCase();
     if (k === 'f') {
-      if (a.canCheck) toast('지금은 체크할 수 있어요 (C)');
-      else act('fold');
+      if (!a.canCheck || Date.now() - foldKeyArmedAt < 1800) act('fold');
+      else {
+        foldKeyArmedAt = Date.now();
+        toast('지금은 체크할 수 있어요. 그래도 접으려면 F를 한 번 더 누르세요');
+      }
     } else if (k === 'c') act(a.canCheck ? 'check' : 'call');
     else if (k === 'r' && a.canRaise) act('raise', raiseTo);
     else if (k === 'a' && a.canRaise) {

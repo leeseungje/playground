@@ -70,7 +70,7 @@ socket.on('state', (s) => {
     }
   lastReactionId = Math.max(lastReactionId, ...s.reactions.map((r) => r.id), 0);
 
-  for (const e of evs) if (e.type === 'tourneyEnd' && s.tourney.winnerName) setTimeout(() => celebrate(s.tourney.winnerName, e.winnerId === s.me), 1600);
+  for (const e of evs) if (e.type === 'tourneyEnd' && s.tourney.winnerName) setTimeout(() => celebrate(s.tourney.winnerName, e.winnerId === s.me), 3000);
 });
 
 // ───────── 입장 ─────────
