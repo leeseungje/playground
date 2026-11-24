@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>사내 홀덤</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
+    <!--
+      GitHub Pages 입구 페이지.
+      게임은 사내 PC에서 돌아가는 서버(npm start)에서 진행되고, 이 페이지는 그 서버로 안내만 한다.
+      서버 PC의 IP가 바뀌면 아래 GAME_SERVER 만 고치면 된다.
+    -->
+    <script>
+      window.GAME_SERVER = 'http://172.20.62.12:3000';
+    </script>
+    <style>
+      :root { --bg: #0f1714; --panel: #18231f; --line: #2b3a34; --text: #e8efe9; --muted: #93a59b; --accent: #f1c04b; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: radial-gradient(ellipse at top, #1f3a2e, var(--bg) 60%);
+        color: var(--text);
+        font-family: 'Pretendard', 'Malgun Gothic', system-ui, sans-serif;
+      }
+      .card {
+        width: min(440px, 100%);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 32px 28px;
+        text-align: center;
+      }
+      h1 { margin: 0 0 6px; font-size: 30px; }
+      .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+      a.btn {
+        display: block;
+        padding: 14px;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #2a2100;
+        font-weight: 800;
+        font-size: 17px;
+        text-decoration: none;
+      }
+      a.btn:hover { background: #ffd469; }
+      .room { margin: 0 0 14px; font-size: 15px; }
+      .room strong { color: var(--accent); letter-spacing: 3px; }
+      .note { margin: 20px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: left; }
+      .note code { color: var(--text); }
+      .countdown { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>♠ 사내 홀덤</h1>
+      <p class="sub">가상 칩으로 즐기는 텍사스 홀덤 · 딜러는 NPC가 맡아요<br />내 패는 나만 보여요</p>
+      <p class="room" id="room" hidden></p>
+      <a class="btn" id="go" href="#">게임 입장</a>
+      <div class="countdown" id="countdown"></div>
+      <p class="note">
+        회사 네트워크(사내망)에 연결된 PC에서만 들어갈 수 있어요.<br />
+        「사이트에 연결할 수 없음」이 뜨면 서버 PC가 꺼져 있거나 사내망이 아닌 거예요.<br />
+        서버 주소: <code id="server"></code>
+      </p>
+    </main>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var room = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+        var target = window.GAME_SERVER.replace(/\/+$/, '') + '/' + (room ? '?room=' + room : '');
+        document.getElementById('go').href = target;
+        document.getElementById('server').textContent = window.GAME_SERVER;
+        if (room) {
+          // 초대 링크로 들어오면 바로 그 방으로 보낸다
+          var roomEl = document.getElementById('room');
+          roomEl.hidden = false;
+          roomEl.innerHTML = '초대받은 방 <strong></strong>';
+          roomEl.querySelector('strong').textContent = room;
+          var left = 3;
+          var cd = document.getElementById('countdown');
+          cd.textContent = left + '초 뒤 자동으로 입장해요';
+          var t = setInterval(function () {
+            left -= 1;
+            if (left <= 0) {
+              clearInterval(t);
+              location.href = target;
+            } else cd.textContent = left + '초 뒤 자동으로 입장해요';
+          }, 1000);
+        }
+      })();
+    </script>
+  </body>
+</html>

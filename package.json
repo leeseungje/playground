@@ -1,0 +1,17 @@
+{
+  "name": "holdem",
+  "version": "0.1.0",
+  "private": true,
+  "description": "사내망에서 친구들과 즐기는 텍사스 홀덤 (가상 칩, NPC 딜러)",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "socket.io": "4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.1"
+  }
+}

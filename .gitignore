@@ -1,0 +1,4 @@
+node_modules/
+tmp-review/
+*.log
+.DS_Store

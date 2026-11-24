@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>사내 홀덤</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- 입장 화면 -->
+    <section id="lobby" class="screen">
+      <div class="lobby-card">
+        <h1>♠ 사내 홀덤</h1>
+        <p class="sub">가상 칩으로 즐기는 텍사스 홀덤 · 딜러는 NPC가 맡아요</p>
+        <label>닉네임<input id="nameInput" maxlength="12" placeholder="예: 승제" autocomplete="off" /></label>
+        <button id="createBtn" class="primary">새 방 만들기</button>
+        <div class="or">또는 초대 코드로 입장</div>
+        <div class="row">
+          <input id="codeInput" maxlength="4" placeholder="코드 4자리" autocomplete="off" />
+          <button id="joinBtn">입장</button>
+        </div>
+        <p id="lobbyError" class="error" role="alert"></p>
+      </div>
+    </section>
+
+    <!-- 게임 화면 -->
+    <section id="game" class="screen hidden">
+      <header class="topbar">
+        <div class="room-info">
+          <span class="code-label">방 코드</span> <strong id="roomCode"></strong>
+          <span class="blinds" id="blinds"></span>
+        </div>
+        <div class="invite">
+          <input id="inviteLink" readonly aria-label="초대 링크" />
+          <button id="copyBtn">초대 링크 복사</button>
+        </div>
+        <div class="host-ctl">
+          <button id="startBtn" class="primary hidden">게임 시작</button>
+          <button id="pauseBtn" class="hidden">다음 판부터 멈춤</button>
+          <button id="leaveBtn" class="ghost">나가기</button>
+        </div>
+      </header>
+
+      <main class="table-wrap">
+        <div class="table" id="table">
+          <div class="dealer">
+            <div class="dealer-avatar" aria-hidden="true">🤵</div>
+            <div class="bubble" id="dealerLine"></div>
+          </div>
+          <div class="center">
+            <div class="board" id="board"></div>
+            <div class="pot" id="pot"></div>
+          </div>
+          <div id="seats"></div>
+        </div>
+      </main>
+
+      <footer class="bottom">
+        <div class="actions" id="actions"></div>
+        <aside class="log">
+          <h2>딜러 기록</h2>
+          <ol id="log"></ol>
+        </aside>
+      </footer>
+    </section>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
