@@ -1,0 +1,215 @@
+/* ───────── 라이어 찾기 ───────── */
+body.liar-page {
+  --accent: #b388ff;
+  background:
+    radial-gradient(ellipse at 50% 0%, #2a1f3d 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, #1d2a3d 0%, transparent 50%),
+    #14101c;
+  overflow: auto;
+}
+.liar-lobby { background: radial-gradient(ellipse 70% 60% at 50% 45%, #4a3470 0%, #2a1f3d 50%, #14101c 100%); }
+.liar-mark { background: linear-gradient(145deg, #d1b3ff, #7c4dff); }
+.liar-lobby .game-switch { display: inline-block; margin: 0 8px; }
+.round-info { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.round-info b { color: var(--text); }
+.phase-chip.open { color: #c9b3ff; border-color: rgba(179, 136, 255, 0.5); }
+
+.liar-game { min-height: 100vh; height: auto; }
+.liar-main { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+.liar-left { padding: 18px 22px 30px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.liar-right { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: calc(100vh - 56px); position: sticky; top: 0; }
+
+/* 사회자 */
+.host-row { display: flex; align-items: center; gap: 14px; }
+.host-avatar {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a3470, #20172e);
+  border: 3px solid var(--accent);
+  box-shadow: 0 6px 20px rgba(124, 77, 255, 0.35);
+}
+.host-bubble {
+  position: relative;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: #fbf8ff;
+  color: #241a33;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.host-bubble::before { content: ''; position: absolute; left: -9px; top: 50%; transform: translateY(-50%); border: 9px solid transparent; border-right-color: #fbf8ff; border-left: 0; }
+.host-bubble.pop { animation: pop 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
+
+/* 내 카드 */
+.center-row { display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: stretch; }
+.my-card-wrap { perspective: 900px; }
+.word-card { position: relative; width: 100%; height: 330px; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.3, 0.9, 0.35, 1.05); cursor: pointer; }
+.word-card.hidden-side { transform: rotateY(180deg); }
+.wc-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+}
+.wc-front { background: linear-gradient(160deg, #fffdf8, #efe9ff); color: #241a33; border: 3px solid #d1b3ff; }
+.wc-front.liar { background: linear-gradient(160deg, #2b0f1a, #5c1028); color: #fff; border-color: #ff6b8a; }
+.wc-back {
+  transform: rotateY(180deg);
+  background:
+    repeating-linear-gradient(45deg, rgba(209, 179, 255, 0.18) 0 3px, transparent 3px 14px),
+    linear-gradient(160deg, #3b2a5a, #1f1630);
+  border: 3px solid #d1b3ff;
+  color: #d1b3ff;
+}
+.wc-back .wc-q { font-size: 72px; font-weight: 900; }
+.wc-cat { font-size: 13px; font-weight: 800; padding: 3px 12px; border-radius: 999px; background: rgba(124, 77, 255, 0.15); color: #7c4dff; }
+.wc-front.liar .wc-cat { background: rgba(255, 255, 255, 0.12); color: #ffb3c4; }
+.wc-word { font-size: 40px; font-weight: 900; letter-spacing: -1px; word-break: keep-all; }
+.wc-front.liar .wc-word { font-size: 34px; color: #ff8fa8; }
+.wc-sub { font-size: 13px; opacity: 0.75; line-height: 1.5; }
+.wc-hint { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+
+/* 행동 영역 */
+.action-box {
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  min-height: 330px;
+}
+.action-box h2 { margin: 0; font-size: 22px; }
+.action-box p { margin: 0; color: var(--muted); line-height: 1.6; }
+.hint-form { display: flex; gap: 8px; }
+.hint-form input { flex: 1; min-width: 0; height: 50px !important; font-size: 17px; }
+.hint-form .btn { height: 50px; }
+.timer-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.timer-bar > i { display: block; height: 100%; background: var(--accent); transition: width 0.25s linear; }
+.guess-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.guess-grid button {
+  height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--line2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+.guess-grid button:hover { border-color: var(--accent); background: rgba(124, 77, 255, 0.15); }
+.result-banner { text-align: center; padding: 6px 0 2px; }
+.result-banner .rb-title { font-size: 34px; font-weight: 900; }
+.result-banner.liar .rb-title { color: #ff8fa8; }
+.result-banner.citizens .rb-title { color: #7fe0a6; }
+.result-banner .rb-sub { color: var(--muted); margin-top: 6px; }
+.reveal-word { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.reveal-word span { padding: 8px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line2); font-weight: 800; }
+.reveal-word b { color: var(--gold); font-size: 20px; margin-left: 6px; }
+.tally { display: flex; flex-direction: column; gap: 6px; }
+.tally-row { display: grid; grid-template-columns: 90px 1fr 30px; gap: 8px; align-items: center; font-size: 14px; }
+.tally-row .bar { height: 14px; border-radius: 7px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.tally-row .bar i { display: block; height: 100%; background: linear-gradient(90deg, #7c4dff, #b388ff); border-radius: 7px; animation: grow 0.8s cubic-bezier(0.3, 0.9, 0.35, 1) both; }
+.tally-row.liar .bar i { background: linear-gradient(90deg, #ff4d6d, #ff8fa8); }
+@keyframes grow { from { width: 0 !important; } }
+
+/* 참가자 */
+.players-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.pcard-l {
+  position: relative;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.pcard-l.turn { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(179, 136, 255, 0.25), 0 0 24px rgba(124, 77, 255, 0.35); }
+.pcard-l.votable { cursor: pointer; }
+.pcard-l.votable:hover { transform: translateY(-2px); border-color: rgba(255, 107, 138, 0.6); }
+.pcard-l.myvote { border-color: #ff6b8a; box-shadow: 0 0 0 3px rgba(255, 107, 138, 0.25); }
+.pcard-l.liar-revealed { border-color: #ff4d6d; background: rgba(255, 77, 109, 0.12); }
+.pcard-l.away { opacity: 0.55; }
+.pcard-l.out { opacity: 0.5; }
+.pl-head { display: flex; gap: 10px; align-items: center; }
+.pl-avatar {
+  --hue: 260;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 18px;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, hsl(var(--hue) 70% 62%), hsl(var(--hue) 55% 32%));
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+.pl-name { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-score { font-size: 12px; color: var(--muted); }
+.pl-tags { position: absolute; top: -9px; right: 10px; display: flex; gap: 4px; }
+.pl-tags span { font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; background: #eee; color: #222; }
+.pl-tags .host { background: var(--accent); color: #fff; }
+.pl-tags .voted { background: #7fe0a6; }
+.pl-tags .liar { background: #ff4d6d; color: #fff; }
+.pl-tags .accused { background: #f2c230; }
+.pl-hints { display: flex; flex-direction: column; gap: 4px; min-height: 20px; }
+.pl-hint { position: relative; padding: 7px 11px; border-radius: 12px; background: #fbf8ff; color: #241a33; font-weight: 700; font-size: 14px; word-break: break-word; animation: pop 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.pl-hint.spoken { background: rgba(255, 255, 255, 0.1); color: var(--muted); font-weight: 500; font-style: italic; }
+.pl-hint small { color: #8a7fa0; font-size: 10px; margin-right: 4px; }
+.pl-vote-count { position: absolute; right: 12px; bottom: 10px; font-size: 22px; font-weight: 900; color: #ff8fa8; }
+
+/* 옆 패널 */
+.liar-right .tabs { flex: none; }
+.liar-right .panel-body { flex: 1; min-height: 0; }
+.liar-right .chat-list { max-height: calc(100vh - 220px); }
+.hist-l { padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.hist-l b.liar { color: #ff8fa8; }
+.hist-l b.citizens { color: #7fe0a6; }
+
+/* 규칙 */
+.rules h3 { margin: 14px 0 6px; color: var(--accent); font-size: 15px; }
+.rules h3:first-child { margin-top: 0; }
+.rules ol, .rules ul { margin: 0; padding-left: 20px; line-height: 1.75; }
+
+@media (max-width: 1000px) {
+  .liar-main { grid-template-columns: 1fr; }
+  .liar-right { position: static; min-height: 420px; border-left: 0; border-top: 1px solid var(--line); }
+  .center-row { grid-template-columns: 1fr; }
+  .word-card { height: 230px; }
+  .action-box { min-height: 0; }
+}
+@media (max-width: 600px) {
+  .liar-left { padding: 12px; }
+  .host-bubble { font-size: 14px; }
+  .host-avatar { width: 50px; height: 50px; font-size: 30px; }
+  .guess-grid { grid-template-columns: repeat(3, 1fr); }
+  .players-grid { grid-template-columns: repeat(2, 1fr); }
+  .round-info { display: none; }
+}
+
+.wc-sub { white-space: pre-line; }
+select.sel { height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: rgba(0, 0, 0, 0.35); color: var(--text); font: inherit; }
+select.sel option { background: #1f1630; }
+.pl-vote-count { top: 12px; bottom: auto; right: 14px; font-size: 20px; }

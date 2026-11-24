@@ -7,6 +7,7 @@ import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import { Room } from './game.js';
 import { RaceRoom } from './race.js';
+import { LiarRoom } from './liar.js';
 
 const PORT = Number(process.env.PORT) || 7777;
 const MAX_ROOMS = 200;
@@ -29,9 +30,9 @@ const server = http.createServer(async (req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     const shared = urlPath.startsWith('/shared/');
     const baseDir = shared ? SHARED_DIR : PUBLIC_DIR;
-    if (urlPath === '/race') {
+    if (urlPath === '/race' || urlPath === '/liar') {
       const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-      res.writeHead(301, { location: `/race/${q}` }).end();
+      res.writeHead(301, { location: `${urlPath}/${q}` }).end();
       return;
     }
     let rel = urlPath === '/' ? 'index.html' : urlPath.replace(shared ? /^\/shared\/+/ : /^\/+/, '');
@@ -185,6 +186,21 @@ attachGame(io.of('/race'), {
     cancel: (room, pid, msg) => room.cancelBet(pid, msg.id),
     quote: (room, pid, msg) => room.quote(String(msg.type), msg.horses),
     settings: (room, pid, msg) => room.setBettingSec(pid, msg.bettingSec),
+    chat: (room, pid, msg) => room.sendChat(pid, msg.text),
+  },
+});
+
+// 라이어 찾기
+attachGame(io.of('/liar'), {
+  makeRoom: (code, onChange) => new LiarRoom(code, { onChange }),
+  dispose: (room) => room.clearTimer(),
+  handlers: {
+    start: (room, pid) => room.start(pid),
+    skip: (room, pid) => room.skip(pid),
+    settings: (room, pid, msg) => room.updateSettings(pid, msg),
+    hint: (room, pid, msg) => room.submitHint(pid, msg.text),
+    vote: (room, pid, msg) => room.vote(pid, String(msg.target)),
+    guess: (room, pid, msg) => room.submitGuess(pid, typeof msg.word === 'string' ? msg.word : null),
     chat: (room, pid, msg) => room.sendChat(pid, msg.text),
   },
 });
