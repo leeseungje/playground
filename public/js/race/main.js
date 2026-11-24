@@ -3,6 +3,7 @@ import { $, el, fmt, toast, hideToast, session, storage, hueOf, initial } from '
 import { createTrack } from './track.js';
 import { jockeyPortrait, GEARS, GEAR_LABEL } from './sprites.js';
 import { modal } from '../panels.js';
+import { copyInvite, pagesInvite } from '../invite.js';
 import { createSidePanel } from '../sidepanel.js';
 import { isMuted, setMuted, play, stopRaceAmbience } from '../sound.js';
 
@@ -231,21 +232,7 @@ function inviteUrl() {
   const base = local && lanUrls.length ? lanUrls[0] : location.origin;
   return `${base}/race/?room=${state.code}`;
 }
-$('#copyBtn').addEventListener('click', async () => {
-  const link = inviteUrl();
-  try {
-    if (window.isSecureContext && navigator.clipboard) await navigator.clipboard.writeText(link);
-    else {
-      const f = $('#copyFallback');
-      f.value = link;
-      f.select();
-      if (!document.execCommand('copy')) throw new Error('copy');
-    }
-    toast('초대 링크를 복사했어요. Teams 채팅방에 붙여 넣으세요!');
-  } catch {
-    window.prompt('이 링크를 복사해 주세요', link);
-  }
-});
+$('#copyBtn').addEventListener('click', () => copyInvite(pagesInvite('race', state.code)));
 $('#startBtn').addEventListener('click', async () => {
   const r = await send('start');
   if (r.error) toast(r.error, 'error');

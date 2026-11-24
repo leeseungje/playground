@@ -1070,3 +1070,5 @@ input:focus { border-color: var(--gold); }
 
 .game-switch { text-align: center; color: var(--gold); font-size: 13px; text-decoration: none; margin-top: 4px; }
 .game-switch:hover { text-decoration: underline; }
+
+.invite-input { width: 100%; font-size: 15px; }

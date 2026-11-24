@@ -74,7 +74,15 @@
       (function () {
         var params = new URLSearchParams(location.search);
         var room = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-        var target = window.GAME_SERVER.replace(/\/+$/, '') + '/' + (room ? '?room=' + room : '');
+        var game = params.get('game');
+        var paths = { race: '/race/', liar: '/liar/' };
+        var names = { race: '🏇 사내 경마', liar: '🕵️ 라이어 찾기' };
+        var path = paths[game] || '/';
+        // 기본 서버 주소의 포트만 바꿀 수 있게 (숫자만 허용)
+        var server = window.GAME_SERVER.replace(/[/]+$/, '');
+        var port = (params.get('port') || '').replace(/[^0-9]/g, '').slice(0, 5);
+        if (port) server = server.replace(/:d+$/, '') + ':' + port;
+        var target = server + path + (room ? '?room=' + room : '');
         document.getElementById('go').href = target;
         document.getElementById('goRace').href = window.GAME_SERVER.replace(/[/]+$/, '') + '/race/';
         document.getElementById('server').textContent = window.GAME_SERVER;
@@ -82,18 +90,16 @@
           // 초대 링크로 들어오면 바로 그 방으로 보낸다
           var roomEl = document.getElementById('room');
           roomEl.hidden = false;
-          roomEl.innerHTML = '초대받은 방 <strong></strong>';
-          roomEl.querySelector('strong').textContent = room;
-          var left = 3;
-          var cd = document.getElementById('countdown');
-          cd.textContent = left + '초 뒤 자동으로 입장해요';
-          var t = setInterval(function () {
-            left -= 1;
-            if (left <= 0) {
-              clearInterval(t);
-              location.href = target;
-            } else cd.textContent = left + '초 뒤 자동으로 입장해요';
-          }, 1000);
+          roomEl.innerHTML = '';
+          roomEl.append((names[game] || '♠ 텍사스 홀덤') + ' · 초대받은 방 ');
+          var strong = document.createElement('strong');
+          strong.textContent = room;
+          roomEl.append(strong);
+          document.getElementById('go').textContent = '지금 입장';
+          document.getElementById('countdown').textContent = '잠시 뒤 자동으로 입장해요…';
+          setTimeout(function () {
+            location.href = target;
+          }, 1500);
         }
       })();
     </script>

@@ -3,6 +3,7 @@ import { $, fmt, toast, session, storage } from './util.js';
 import { createTable } from './table.js';
 import { createActions } from './actions.js';
 import { createPanels, openSettings, celebrate } from './panels.js';
+import { copyInvite, pagesInvite } from './invite.js';
 import { isMuted, setMuted, play } from './sound.js';
 
 // ───────── 플레이어 토큰 (탭마다 다른 플레이어, 새로고침하면 같은 자리) ─────────
@@ -161,21 +162,7 @@ function renderTop() {
   $('#soundBtn').textContent = isMuted() ? '🔇' : '🔊';
 }
 
-$('#copyBtn').addEventListener('click', async () => {
-  const link = inviteUrl();
-  try {
-    if (window.isSecureContext && navigator.clipboard) await navigator.clipboard.writeText(link);
-    else {
-      const f = $('#copyFallback');
-      f.value = link;
-      f.select();
-      if (!document.execCommand('copy')) throw new Error('copy');
-    }
-    toast('초대 링크를 복사했어요. Teams 채팅방에 붙여 넣으세요!');
-  } catch {
-    window.prompt('이 링크를 복사해 주세요', link);
-  }
-});
+$('#copyBtn').addEventListener('click', () => copyInvite(pagesInvite('holdem', state.code)));
 $('#startBtn').addEventListener('click', async () => {
   const r = await send('start');
   if (r.error) toast(r.error, 'error');
