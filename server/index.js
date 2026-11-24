@@ -9,22 +9,28 @@ import { Room } from './game.js';
 
 const PORT = Number(process.env.PORT) || 7777;
 const MAX_ROOMS = 200;
-const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const SHARED_DIR = path.join(ROOT, 'shared'); // 서버·브라우저 공용 모듈 (족보 판정)
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
 };
 
 // ───────── 정적 파일 ─────────
 const server = http.createServer(async (req, res) => {
   try {
     const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
-    const file = path.resolve(PUBLIC_DIR, rel);
-    if (!file.startsWith(PUBLIC_DIR + path.sep)) {
+    const shared = urlPath.startsWith('/shared/');
+    const baseDir = shared ? SHARED_DIR : PUBLIC_DIR;
+    const rel = urlPath === '/' ? 'index.html' : urlPath.replace(shared ? /^\/shared\/+/ : /^\/+/, '');
+    const file = path.resolve(baseDir, rel);
+    if (!file.startsWith(baseDir + path.sep)) {
       res.writeHead(403).end();
       return;
     }
@@ -135,6 +141,9 @@ io.on('connection', (socket) => {
   handle('pause', (room, pid) => room.pause(pid));
   handle('rebuy', (room, pid) => room.rebuy(pid));
   handle('action', (room, pid, msg) => room.act(pid, String(msg.type), msg.amount));
+  handle('settings', (room, pid, msg) => room.updateSettings(pid, msg));
+  handle('chat', (room, pid, msg) => room.sendChat(pid, msg.text));
+  handle('react', (room, pid, msg) => room.react(pid, msg.emoji));
   handle('leave', (room, pid) => {
     room.leave(pid);
     socket.data.code = null;

@@ -2,72 +2,87 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1411" />
     <title>사내 홀덤</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/css/style.css" />
   </head>
   <body>
     <!-- 입장 화면 -->
-    <section id="lobby" class="screen">
+    <section id="lobby" class="lobby">
+      <div class="lobby-deco" aria-hidden="true">
+        <span class="deco-card c1">A<i>♠</i></span>
+        <span class="deco-card c2 red">K<i>♥</i></span>
+        <span class="deco-card c3 red">Q<i>♦</i></span>
+        <span class="deco-card c4">J<i>♣</i></span>
+      </div>
       <div class="lobby-card">
-        <h1>♠ 사내 홀덤</h1>
-        <p class="sub">가상 칩으로 즐기는 텍사스 홀덤 · 딜러는 NPC가 맡아요</p>
-        <label>닉네임<input id="nameInput" maxlength="12" placeholder="예: 승제" autocomplete="off" /></label>
-        <button id="createBtn" class="primary">새 방 만들기</button>
-        <div class="or">또는 초대 코드로 입장</div>
-        <div class="row">
-          <input id="codeInput" maxlength="4" placeholder="코드 4자리" autocomplete="off" />
-          <button id="joinBtn">입장</button>
+        <div class="brand">
+          <span class="brand-mark">♠</span>
+          <div>
+            <h1>사내 홀덤</h1>
+            <p>가상 칩으로 즐기는 텍사스 홀덤 · NPC 딜러</p>
+          </div>
+        </div>
+        <label class="field">
+          <span>닉네임</span>
+          <input id="nameInput" maxlength="12" placeholder="예: 승제" autocomplete="off" />
+        </label>
+        <button id="createBtn" class="btn primary big">새 테이블 만들기</button>
+        <div class="divider"><span>초대 코드로 입장</span></div>
+        <div class="join-row">
+          <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" aria-label="초대 코드 4자리" />
+          <button id="joinBtn" class="btn">입장</button>
         </div>
         <p id="lobbyError" class="error" role="alert"></p>
+        <ul class="lobby-points">
+          <li>내 패는 나만 보여요. 서버가 다른 사람에게 보내지 않아요.</li>
+          <li>같은 브라우저라도 탭마다 다른 플레이어가 돼요.</li>
+        </ul>
       </div>
     </section>
 
     <!-- 게임 화면 -->
-    <section id="game" class="screen hidden">
+    <section id="game" class="game hidden">
       <header class="topbar">
-        <div class="room-info">
-          <span class="code-label">방 코드</span> <strong id="roomCode"></strong>
-          <span class="blinds" id="blinds"></span>
+        <div class="tb-left">
+          <span class="brand-mark sm">♠</span>
+          <div class="room-chip">
+            <span class="muted">테이블</span>
+            <strong id="roomCode"></strong>
+            <button id="copyBtn" class="btn small" title="초대 링크 복사">초대 링크 복사</button>
+          </div>
+          <div class="blind-chip" id="blindInfo"></div>
         </div>
-        <div class="invite">
-          <input id="inviteLink" readonly aria-label="초대 링크" />
-          <button id="copyBtn">초대 링크 복사</button>
-        </div>
-        <div class="host-ctl">
-          <button id="startBtn" class="primary hidden">게임 시작</button>
-          <button id="pauseBtn" class="hidden">다음 판부터 멈춤</button>
-          <button id="leaveBtn" class="ghost">나가기</button>
+        <div class="tb-right">
+          <button id="startBtn" class="btn primary hidden">게임 시작</button>
+          <button id="pauseBtn" class="btn hidden">다음 판부터 멈춤</button>
+          <button id="settingsBtn" class="btn icon" title="방 설정" aria-label="방 설정">⚙</button>
+          <button id="soundBtn" class="btn icon" title="소리" aria-label="소리 켜기/끄기">🔊</button>
+          <button id="panelBtn" class="btn icon panel-toggle" title="채팅·기록" aria-label="채팅·기록 열기">💬<span class="dot hidden" id="panelDot"></span></button>
+          <button id="leaveBtn" class="btn ghost">나가기</button>
         </div>
       </header>
+      <div id="offline" class="offline hidden">서버와 연결이 끊겼어요. 다시 연결하는 중…</div>
 
-      <main class="table-wrap">
-        <div class="table" id="table">
-          <div class="dealer">
-            <div class="dealer-avatar" aria-hidden="true">🤵</div>
-            <div class="bubble" id="dealerLine"></div>
-          </div>
-          <div class="center">
-            <div class="board" id="board"></div>
-            <div class="pot" id="pot"></div>
-          </div>
-          <div id="seats"></div>
+      <div class="main">
+        <div class="table-area">
+          <div id="stageWrap" class="stage-wrap"></div>
         </div>
-      </main>
+        <aside id="panel" class="panel"></aside>
+      </div>
 
-      <footer class="bottom">
-        <div class="actions" id="actions"></div>
-        <aside class="log">
-          <h2>딜러 기록</h2>
-          <ol id="log"></ol>
-        </aside>
-      </footer>
+      <footer id="actions" class="actions"></footer>
     </section>
 
     <div id="toast" class="toast" role="status"></div>
+    <input id="copyFallback" class="sr-only" aria-hidden="true" tabindex="-1" />
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/app.js"></script>
+    <script type="module" src="/js/main.js"></script>
   </body>
 </html>

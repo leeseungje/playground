@@ -282,3 +282,127 @@ test('나갔다가 같은 탭으로 다시 들어오면 칩이 이어짐', () =>
   const back = room.join({ token, name: 'P1', socketId: 'again' }).player;
   assert.equal(back.chips, 7);
 });
+
+// ───────── 방 설정·토너먼트·채팅·기록 ─────────
+
+test('방 설정: 방장만, 판 사이에만, 범위 검사, 첫 판 전이면 칩을 맞춤', () => {
+  const { room, ps } = setup(3);
+  assert.ok(room.updateSettings(ps[1].id, { bigBlind: 50 }).error);
+  assert.ok(room.updateSettings(ps[0].id, { bigBlind: 500, startChips: 1000 }).error, '시작 칩 < 빅블라인드×10');
+  assert.equal(room.updateSettings(ps[0].id, { bigBlind: 50, startChips: 5000, turnSec: 999 }).error, undefined);
+  assert.deepEqual(room.blinds, [25, 50]);
+  assert.equal(room.settings.turnSec, 120);
+  assert.ok(ps.every((p) => p.chips === 5000));
+  room.start(ps[0].id);
+  assert.ok(room.updateSettings(ps[0].id, { bigBlind: 20 }).error, '판 도중 변경 불가');
+});
+
+test('토너먼트: 블라인드가 오르고, 리바이 불가, 마지막 1명이 우승하며 순위가 매겨짐', () => {
+  const clock = fakeClock();
+  const room = new Room('T', { schedule: clock.schedule });
+  const ps = [];
+  for (let i = 0; i < 5; i++) ps.push(room.join({ token: `tour-${i}-xxxxxxxxxxxxx`, name: `T${i}`, socketId: `t${i}` }).player);
+  assert.equal(room.updateSettings(ps[0].id, { mode: 'tournament', startChips: 500, bigBlind: 20, blindUpHands: 2 }).error, undefined);
+  assert.equal(room.start(ps[0].id).error, undefined);
+  assert.ok(room.tourney.active);
+  const rnd = mulberry32(7);
+  let guard = 0;
+  let sawLevel2 = false;
+  while (room.tourney.active && guard++ < 100_000) {
+    if (room.tourney.level >= 1) sawLevel2 = true;
+    assert.equal(chipsOnTable(room), 2500);
+    const h = room.hand;
+    if (h.street === 'done') {
+      for (const p of room.players) if (p.chips === 0) assert.ok(room.rebuy(p.id).error, '토너먼트 리바이 불가');
+      assert.ok(clock.step());
+      continue;
+    }
+    if (room.currentSeat()) {
+      const s = room.currentSeat();
+      // 공격적으로 올인을 섞어 빨리 끝나게
+      // 처음 몇 판은 조용히(체크·콜) 넘겨 블라인드 상승을 확인하고, 그 뒤엔 공격적으로 끝낸다
+      const r = room.handNo <= 4 ? room.act(s.id, room.options(s).canCheck ? 'check' : 'call') : rnd() < 0.3 && room.options(s).canRaise ? room.act(s.id, 'allin') : randomAction(room, rnd);
+      assert.equal(r.error, undefined);
+    } else assert.ok(clock.step());
+  }
+  assert.equal(room.tourney.active, false, '토너먼트가 끝나지 않음');
+  assert.ok(sawLevel2, '블라인드가 오르지 않음');
+  const champ = room.player(room.tourney.winnerId);
+  assert.equal(champ.chips, 2500);
+  const places = room.tourney.places.map((x) => x.place).sort((a, b) => a - b);
+  assert.deepEqual(places, [1, 2, 3, 4, 5]);
+  assert.equal(room.running, false);
+  // 끝난 뒤 다시 시작하면 새 토너먼트
+  assert.equal(room.start(ps[0].id).error, undefined);
+  assert.ok(room.players.every((p) => p.chips + (room.seatOf(p.id)?.total ?? 0) === 500));
+});
+
+test('토너먼트 중 새로 들어온 사람은 구경만 (칩 0)', () => {
+  const { room, ps } = setup(3);
+  room.updateSettings(ps[0].id, { mode: 'tournament' });
+  room.start(ps[0].id);
+  const late = room.join({ token: 'late-xxxxxxxxxxxxxxxx', name: '늦게', socketId: 'z' }).player;
+  assert.equal(late.chips, 0);
+  assert.equal(room.viewFor(late.id).players.find((p) => p.id === late.id).spectator, true);
+});
+
+test('채팅·이모지: 정리·길이 제한·도배 방지', () => {
+  let t = 0;
+  const room = new Room('C', { schedule: () => () => {}, now: () => t });
+  const a = room.join({ token: 'chat-a-xxxxxxxxxxxxxx', name: 'A', socketId: 'a' }).player;
+  assert.equal(room.sendChat(a.id, '  안녕\n하세요  ').error, undefined);
+  assert.equal(room.chat.at(-1).text, '안녕 하세요');
+  assert.ok(room.sendChat(a.id, '또').error, '600ms 안에 다시 보내면 거절');
+  t += 700;
+  assert.equal(room.sendChat(a.id, 'x'.repeat(500)).error, undefined);
+  assert.equal(room.chat.at(-1).text.length, 100);
+  t += 700;
+  assert.ok(room.react(a.id, '💩').error);
+  assert.equal(room.react(a.id, '🔥').error, undefined);
+  assert.ok(room.sendChat(a.id, '   ').error);
+});
+
+test('판 기록·이벤트에는 공개되지 않은 패가 들어가지 않음', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const rnd = mulberry32(seed * 31);
+    const { room, clock, ps } = setup(4);
+    room.start(ps[0].id);
+    for (let k = 0; k < 2000 && room.handNo < 15; k++) {
+      const h = room.hand;
+      if (h.street === 'done') {
+        // 직전 판: 공개되지 않은 사람의 패가 기록·이벤트·다른 사람 화면에 없어야 함
+        const rec = room.history[0];
+        assert.equal(rec.no, h.no);
+        for (const s of h.seats) {
+          if (h.revealed.has(s.id)) continue;
+          const recJson = JSON.stringify(rec) + JSON.stringify(room.events);
+          for (const c of s.hole) {
+            const onBoard = h.board.some((b) => b.r === c.r && b.s === c.s);
+            if (!onBoard) assert.ok(!recJson.includes(JSON.stringify(c)), `seed ${seed}: 공개 안 된 패가 기록에 들어감`);
+          }
+          for (const viewer of room.players) {
+            if (viewer.id === s.id) continue;
+            const v = room.viewFor(viewer.id);
+            assert.equal(v.players.find((p) => p.id === s.id)?.cards?.[0] ?? 'back', 'back');
+          }
+        }
+        for (const p of room.players) if (p.chips === 0) room.rebuy(p.id);
+        clock.step();
+        continue;
+      }
+      if (room.currentSeat()) randomAction(room, rnd);
+      else clock.step();
+    }
+  }
+});
+
+test('이벤트: 데이터가 이벤트 종류(type)를 덮어쓰지 않음', () => {
+  const { room, clock, ps } = setup(2);
+  room.start(ps[0].id);
+  room.act(room.currentSeat().id, 'fold');
+  const win = room.events.find((e) => e.type === 'win');
+  assert.ok(win, 'win 이벤트가 있어야 함');
+  assert.equal(win.kind, 'fold');
+  for (const e of room.events) assert.ok(['join', 'deal', 'turn', 'action', 'collect', 'street', 'win', 'reveal', 'blinds', 'settings', 'rebuy', 'tourneyStart', 'tourneyEnd'].includes(e.type), `알 수 없는 이벤트 ${e.type}`);
+  void clock;
+});

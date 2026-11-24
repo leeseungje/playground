@@ -34,3 +34,13 @@ test('비교', () => {
   // 플러시는 5장 전체 비교
   assert.equal(cmp('As 9s 7s 4s 3s Kd Qc', 'As 9s 7s 4s 2s Kd Qc'), 1);
 });
+
+test('공용 모듈: 지금 내 족보 (2~7장)', async () => {
+  const { currentHand, handDetail } = await import('../shared/hand-eval.js');
+  assert.equal(currentHand(c('As Ad')).detail, 'A 원페어');
+  assert.equal(currentHand(c('As Kd')).detail, 'A 하이');
+  assert.equal(currentHand(c('As Kd Ks 7c 2d')).detail, 'K 원페어');
+  assert.equal(currentHand(c('As Ks Qs Js Ts 2d')).detail, '로열 플러시');
+  assert.equal(handDetail([2, 13, 7, 14]), 'K·7 투페어');
+  assert.equal(currentHand(c('Ad 2s 3h 4c 5d')).detail, '5 하이 스트레이트');
+});
