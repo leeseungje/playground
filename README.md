@@ -12,7 +12,7 @@ https://leeseungje.github.io/TexasHoldem/ 는 게임 서버로 안내하는 입�
 
 - `?room=코드` 를 붙이면 3초 뒤 그 방으로 바로 들어갑니다. 예: `https://leeseungje.github.io/TexasHoldem/?room=AB12`
 - 서버 PC의 IP가 바뀌면 `index.html` 의 `GAME_SERVER` 값만 고쳐서 올리면 됩니다.
-- Pages 설정은 **main 브랜치 / (root)** 로 두세요.
+- Pages는 **main 브랜치 / (root)** 에서 배포합니다 (Settings → Pages → Deploy from a branch).
 
 ## 실행
 
