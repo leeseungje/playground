@@ -56,7 +56,7 @@ socket.on('state', (s) => {
   fresh = false;
   showGame();
   table.render(s, evs);
-  actions.render(s);
+  actions.render(s, evs);
   panels.render(s);
   renderTop();
 
@@ -149,7 +149,9 @@ function renderTop() {
   const t = s.tourney;
   $('#blindInfo').replaceChildren(
     ...(t.active
-      ? [`토너먼트 · 레벨 ${t.level} · `, Object.assign(document.createElement('b'), { textContent: `${fmt(sb)}/${fmt(bb)}` }), ` · ${t.handsToNext ? `${t.handsToNext}판 뒤 ${fmt(t.nextBlinds[0])}/${fmt(t.nextBlinds[1])}` : `다음 판부터 ${fmt(t.nextBlinds[0])}/${fmt(t.nextBlinds[1])}`}`]
+      ? t.blindsFixed
+        ? ['토너먼트 · 블라인드 고정 ', Object.assign(document.createElement('b'), { textContent: `${fmt(sb)}/${fmt(bb)}` }), ' · 칩을 다 쓰면 탈락']
+        : [`토너먼트 · 레벨 ${t.level} · `, Object.assign(document.createElement('b'), { textContent: `${fmt(sb)}/${fmt(bb)}` }), ` · ${t.handsToNext ? `${t.handsToNext}판 뒤 ${fmt(t.nextBlinds[0])}/${fmt(t.nextBlinds[1])}` : `다음 판부터 ${fmt(t.nextBlinds[0])}/${fmt(t.nextBlinds[1])}`}`]
       : [s.settings.mode === 'tournament' ? '토너먼트 대기 · ' : '자유 게임 · ', '블라인드 ', Object.assign(document.createElement('b'), { textContent: `${fmt(sb)}/${fmt(bb)}` })]),
   );
   const startBtn = $('#startBtn');

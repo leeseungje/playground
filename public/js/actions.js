@@ -61,14 +61,14 @@ export function createActions(root, { send }) {
     const p = me();
     const h = state.hand;
     if (h && h.no !== seenHandNo) {
-      if (seenHandNo !== null) holdInfo(state.players.filter((x) => x.dealtIn).length * 180 + 640);
+      if (seenHandNo !== null || dealJustHappened) holdInfo(state.players.filter((x) => x.dealtIn).length * 180 + 640);
       seenHandNo = h.no;
       seenBoard = 0;
       prevBoardLen = 0;
     }
     const boardLen = h?.board?.length ?? 0;
     if (boardLen > seenBoard) {
-      holdInfo(620);
+      holdInfo(boardLen - seenBoard >= 3 ? 1250 : 950);
       seenBoard = boardLen;
     }
     const holding = performance.now() < infoHoldUntil;
@@ -243,8 +243,10 @@ export function createActions(root, { send }) {
 
   let infoSig = '';
   let mainSig = '';
-  function render(s) {
+  let dealJustHappened = false;
+  function render(s, evs = []) {
     state = s;
+    dealJustHappened = evs.some((e) => e.type === 'deal');
     const p = me();
     const h = state.hand;
     // 채팅 등으로 상태가 자주 와도, 바뀐 게 없으면 다시 그리지 않는다 (슬라이더 드래그가 끊기지 않게)

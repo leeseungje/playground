@@ -66,7 +66,7 @@ export function createPanels(root, { send }) {
       chatList.scrollTop = chatList.scrollHeight;
     }
     // 숨겨져 있을 때는 스크롤 위치를 정할 수 없으므로 보이게 된 뒤 맨 아래로
-    if (k === 'log') logList.scrollTop = logList.scrollHeight;
+    if (k === 'log') bodies.get('log').scrollTop = bodies.get('log').scrollHeight;
   }
   select('chat');
 
@@ -180,7 +180,7 @@ export function createPanels(root, { send }) {
     if (sig === logSig) return;
     logSig = sig;
     logList.replaceChildren(...state.log.map((t) => el('li', {}, t)));
-    logList.scrollTop = logList.scrollHeight;
+    bodies.get('log').scrollTop = bodies.get('log').scrollHeight;
   }
 
   return {
@@ -229,10 +229,10 @@ export function openSettings(state, { send }) {
         },
       },
       m === 'cash' ? '자유 게임' : '토너먼트',
-      el('small', {}, m === 'cash' ? '칩을 다 잃으면 다시 받기' : '블라인드가 오르고 최후의 1인이 우승'),
+      el('small', {}, m === 'cash' ? '칩을 다 잃으면 다시 받을 수 있어요' : '시작 칩을 다 쓰면 탈락, 최후의 1인이 우승'),
     ),
   );
-  const blindUp = field('블라인드 상승 주기 (판)', 'blindUpHands', s.blindUpHands, lim.blindUpHands, '이 판 수마다 블라인드가 한 단계 올라요');
+  const blindUp = field('블라인드 상승 주기 (판)', 'blindUpHands', s.blindUpHands, lim.blindUpHands, '이 판 수마다 블라인드가 한 단계 올라요. 0이면 오르지 않아요');
   blindUp.classList.toggle('hidden', mode !== 'tournament');
   const form = el(
     'form',

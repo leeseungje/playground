@@ -1054,3 +1054,16 @@ input:focus { border-color: var(--gold); }
 }
 .stage[data-mode='portrait'] .board .pcard, .stage[data-mode='portrait'] .board-slot { width: 60px; height: 84px; }
 .stage[data-mode='portrait'] .board { gap: 4px; }
+
+/* 딜러 말풍선: 꼬리를 세로 가운데에 두고, 말풍선을 딜러 얼굴 높이에 맞춘다 */
+.dealer-bubble { top: 24px; }
+.dealer-bubble::before { top: 50%; transform: translateY(-50%); }
+.stage[data-mode='portrait'] .dealer-bubble { top: 16px; }
+.stage[data-mode='portrait'] .dealer-bubble::before { top: 50%; transform: translateY(-50%); }
+/* 세로 화면: 카드가 명패 위에 있으므로 +금액은 카드보다 더 위에 */
+.stage[data-mode='portrait'] .win-plus { top: -96px; }
+.stage[data-mode='portrait'] .seat:not(.me) .seat-status { top: -86px; }
+@media (max-width: 760px) {
+  .hide-sm { display: none; }
+  .tb-right .btn:not(.icon) { padding: 0 9px; }
+}

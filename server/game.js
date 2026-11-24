@@ -7,7 +7,7 @@ export const DEFAULTS = {
   bigBlind: 20,
   turnSec: 30, // 자기 차례 제한 시간
   mode: 'cash', // cash: 칩 다시 받기 가능 / tournament: 블라인드가 오르고 마지막 1명이 우승
-  blindUpHands: 8, // 토너먼트에서 몇 판마다 블라인드가 오르는지
+  blindUpHands: 8, // 토너먼트에서 몇 판마다 블라인드가 오르는지 (0이면 오르지 않음: 시작 칩을 다 쓰면 탈락만)
   awayTurnMs: 5_000, // 접속이 끊긴 사람 차례
   streetPauseMs: 900, // 스트리트 사이 잠깐 멈춤 (칩 모으는 연출 시간)
   runoutStepMs: 1_600, // 올인 후 보드 한 장씩 열기
@@ -19,7 +19,7 @@ export const SETTING_LIMITS = {
   startChips: [100, 1_000_000],
   bigBlind: [2, 100_000],
   turnSec: [10, 120],
-  blindUpHands: [2, 50],
+  blindUpHands: [0, 50], // 0 = 상승 없음, 그 외에는 2판 이상
 };
 
 /** 토너먼트 블라인드 단계 (빅블라인드 20 기준, 시작 빅블라인드에 맞춰 배율 적용) */
@@ -350,6 +350,7 @@ export class Room {
       const v = Number(patch[k]);
       if (!Number.isFinite(v)) return { error: '숫자가 올바르지 않아요' };
       s[k] = clampInt(v, SETTING_LIMITS[k]);
+      if (k === 'blindUpHands' && s[k] === 1) s[k] = 2;
     }
     if (patch.mode !== undefined) {
       if (patch.mode !== 'cash' && patch.mode !== 'tournament') return { error: '알 수 없는 모드예요' };
@@ -378,7 +379,7 @@ export class Room {
       }
     }
     this.say(
-      `방 설정이 바뀌었어요: ${s.mode === 'tournament' ? `토너먼트(${s.blindUpHands}판마다 블라인드 상승)` : '자유 게임'}, ` +
+      `방 설정이 바뀌었어요: ${s.mode === 'tournament' ? (s.blindUpHands ? `토너먼트(${s.blindUpHands}판마다 블라인드 상승)` : '토너먼트(블라인드 고정, 칩을 다 쓰면 탈락)') : '자유 게임'}, ` +
         `블라인드 ${this.blinds[0]}/${this.blinds[1]}, 시작 칩 ${s.startChips.toLocaleString('ko-KR')}, 제한 시간 ${s.turnSec}초.`,
     );
     this.emit('settings');
@@ -421,7 +422,7 @@ export class Room {
     this.tourney = { active: true, hands: 0, level: 0, winnerId: null, winnerName: null, places: [], entrants: this.players.filter((p) => !p.spectator).length };
     this.blinds = this.levelBlinds(0);
     this.history = [];
-    this.say(`토너먼트를 시작합니다! ${this.tourney.entrants}명 참가, 블라인드 ${this.blinds[0]}/${this.blinds[1]}부터 ${s.blindUpHands}판마다 올라가요.`);
+    this.say(`토너먼트를 시작합니다! ${this.tourney.entrants}명 참가, 블라인드 ${this.blinds[0]}/${this.blinds[1]}${s.blindUpHands ? `부터 ${s.blindUpHands}판마다 올라가요` : '로 고정이에요'}. 시작 칩을 다 쓰면 탈락이에요.`);
     this.emit('tourneyStart');
   }
 
@@ -477,7 +478,7 @@ export class Room {
 
     // 토너먼트 블라인드 상승
     if (this.tourney.active) {
-      const level = Math.floor(this.tourney.hands / this.settings.blindUpHands);
+      const level = this.settings.blindUpHands ? Math.floor(this.tourney.hands / this.settings.blindUpHands) : 0;
       if (level !== this.tourney.level) {
         this.tourney.level = level;
         this.blinds = this.levelBlinds(level);
@@ -1020,7 +1021,8 @@ export class Room {
         active: t.active,
         level: t.level + 1,
         // 이번 판 다음으로 몇 판 더 하면 블라인드가 오르는지 (0이면 다음 판부터 상승)
-        handsToNext: t.active ? (this.settings.blindUpHands - (t.hands % this.settings.blindUpHands)) % this.settings.blindUpHands : 0,
+        handsToNext: t.active && this.settings.blindUpHands ? (this.settings.blindUpHands - (t.hands % this.settings.blindUpHands)) % this.settings.blindUpHands : 0,
+        blindsFixed: !this.settings.blindUpHands,
         nextBlinds: t.active ? this.levelBlinds(t.level + 1) : null,
         winnerId: t.winnerId,
         winnerName: t.winnerName,

@@ -45,7 +45,7 @@ function portraitLayout(H) {
     pot: [280, cy - 103],
     dealer: [280, 50],
     gap: 44,
-    bottomGap: 52, // 내 카드(큰 카드)와 옆 사람이 겹치지 않게 아래쪽을 비운다
+    bottomGap: 60, // 내 카드(큰 카드)와 옆 사람이 겹치지 않게 아래쪽을 비운다
   };
 }
 
@@ -206,7 +206,8 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
       const cardOff = isMe ? [0, compact ? -100 : -108] : compact ? [0, -54] : [u[0] * 142, u[1] * 84];
       s.root.dataset.cards = isMe ? 'up' : compact ? 'up' : u[1] > 0.55 ? 'down' : 'side';
       s.cards.style.transform = `translate(calc(-50% + ${cardOff[0]}px), calc(-50% + ${cardOff[1]}px))`;
-      s.betPos = isMe ? [pos[0], pos[1] - (compact ? 196 : 218)] : lerp(pos, center, compact ? 0.32 : 0.42);
+      const cardDist = Math.hypot(cardOff[0], cardOff[1]);
+      s.betPos = isMe ? [pos[0], pos[1] - (compact ? 196 : 218)] : compact ? [pos[0] + u[0] * 100, pos[1] + u[1] * 60] : [pos[0] + u[0] * (cardDist + 66), pos[1] + u[1] * (cardDist + 40)];
       place(s.bet, s.betPos);
       if (instant) requestAnimationFrame(() => s.root.classList.remove('no-move'));
     });
@@ -407,6 +408,11 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
           const revealLeft = holds.size ? Math.max(...holds.values()) - performance.now() : 0;
           const delay = results?.type === 'showdown' ? Math.max(1100, revealLeft + 650) : 500;
           winDelay = delay;
+          revealDoneAt = performance.now() + delay;
+          setTimeout(() => {
+            dealer.say(state.dealerLine);
+            renderCards();
+          }, delay + 10);
           potHold = { until: performance.now() + delay, value: state.hand?.pot ?? 0 };
           renderPot();
           setTimeout(renderPot, delay + 10);
@@ -465,7 +471,9 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
     const ids = Object.keys(r.payouts);
     if (r.type === 'fold') return { text: `${name(ids[0])}님이 팟을 가져갑니다`, cls: 'win' };
     if (ids.length === 1) return { text: `${name(ids[0])}님 승리 · ${r.hands[ids[0]]?.detail ?? ''}`, cls: 'win' };
-    return { text: `${ids.map(name).join(', ')} 나눠 가짐`, cls: 'win' };
+    // 한 팟을 여럿이 나눈 경우만 '나눠 가짐', 팟마다 다른 사람이 이긴 경우는 각자 승리
+    const split = r.pots.some((p) => !p.returned && p.winners.length > 1);
+    return { text: split ? `${ids.map(name).join(', ')} 나눠 가짐` : `${ids.map(name).join(', ')} 승리 (팟별)`, cls: 'win' };
   }
 
   let bannerTimer = null;
@@ -514,7 +522,7 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
       const hn = r && h.street === 'done' && !flipping ? r.hands?.[p.id] ?? null : null;
       s.handName.textContent = hn ? hn.detail : '';
       s.handName.classList.toggle('show', !!hn);
-      s.handName.classList.toggle('won', !!(hn && r.payouts[p.id]));
+      s.handName.classList.toggle('won', !!(hn && r.payouts[p.id] && performance.now() >= revealDoneAt));
     }
     boardEls.forEach((c, i) => {
       let v = h?.board?.[i] ?? null;
@@ -543,9 +551,11 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
     return bestCache.cards;
   }
 
+  let revealDoneAt = 0;
   function winningCards() {
     const r = state.hand?.results;
     if (!r || r.type !== 'showdown' || state.hand.street !== 'done') return [];
+    if (performance.now() < revealDoneAt) return [];
     return [...new Set(Object.keys(r.payouts))].flatMap((id) => r.hands[id]?.cards ?? []);
   }
 
@@ -636,9 +646,12 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
       if (b) {
         // 버튼 주인의 아바타 왼쪽 아래 모서리에 붙인다 (카드·칩·꼬리표와 겹치지 않는 자리)
         const isMe = b.root.classList.contains('me');
-        const halfW = mode === 'portrait' ? (isMe ? 95 : 75) : 100;
-        const dy = mode === 'portrait' ? (isMe ? 24 : 20) : 24;
-        place(dealerBtn, [b.pos[0] - halfW + 6, b.pos[1] + dy]);
+        const halfW = mode === 'portrait' ? (isMe ? 95 : 80) : 100;
+        const dy = mode === 'portrait' ? (isMe ? 24 : 22) : 24;
+        // 카드가 아래로 가는 자리면 위 모서리, 아니면 아래 모서리. 가로는 화면 바깥쪽 모서리
+        const vy = b.root.dataset.cards === 'down' ? -dy : dy;
+        const outer = isMe || b.pos[0] < L.cx ? -1 : 1;
+        place(dealerBtn, [b.pos[0] + outer * (halfW - (outer > 0 ? 16 : 6)), b.pos[1] + vy]);
         dealerBtn.classList.add('show');
       }
     } else dealerBtn.classList.remove('show');
@@ -646,7 +659,8 @@ export function createTable(rootWrap, { onSeatClick } = {}) {
     renderCards();
     renderPot();
     renderChips();
-    if (!newEvents.some((e) => e.type === 'deal')) dealer.say(state.dealerLine);
+    // 딜 중이거나 쇼다운 공개 중에는 딜러가 결과를 먼저 말하지 않게 (공개가 끝난 뒤 말한다)
+    if (!newEvents.some((e) => e.type === 'deal' || e.type === 'win')) dealer.say(state.dealerLine);
     postEvents(newEvents);
   }
 

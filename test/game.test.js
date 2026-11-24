@@ -559,3 +559,20 @@ test('토너먼트가 끝나면 블라인드가 방 설정으로 돌아가고, �
   assert.equal(ps[0].place, null);
   assert.equal(room.viewFor(ps[0].id).tourney.winnerName, null);
 });
+
+test('토너먼트: 블라인드 상승 0이면 블라인드 고정, 칩을 다 쓰면 탈락', () => {
+  const { room, clock, ps } = tourney(3, 300, { blindUpHands: 0 });
+  assert.equal(room.settings.blindUpHands, 0);
+  runUntil(room, clock, () => !room.tourney.active, (s) => room.act(s.id, room.options(s).canRaise ? 'allin' : room.options(s).canCheck ? 'check' : 'call'));
+  assert.equal(room.tourney.active, false);
+  assert.equal(room.tourney.level, 0);
+  assert.deepEqual(room.tourney.places.map((x) => x.place).sort(), [1, 2, 3]);
+  for (const p of ps) if (p.id !== room.tourney.winnerId) assert.ok(room.rebuy(p.id).error, '탈락자는 다시 받을 수 없음');
+  assert.ok(room.viewFor(ps[0].id).tourney.blindsFixed);
+});
+
+test('설정: 블라인드 상승 1은 2로 맞춤', () => {
+  const { room, ps } = setup(2);
+  room.updateSettings(ps[0].id, { blindUpHands: 1 });
+  assert.equal(room.settings.blindUpHands, 2);
+});
