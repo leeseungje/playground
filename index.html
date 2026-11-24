@@ -81,7 +81,7 @@
         // 기본 서버 주소의 포트만 바꿀 수 있게 (숫자만 허용)
         var server = window.GAME_SERVER.replace(/[/]+$/, '');
         var port = (params.get('port') || '').replace(/[^0-9]/g, '').slice(0, 5);
-        if (port) server = server.replace(/:d+$/, '') + ':' + port;
+        if (port) server = server.replace(/:[0-9]+$/, '') + ':' + port;
         var target = server + path + (room ? '?room=' + room : '');
         document.getElementById('go').href = target;
         document.getElementById('goRace').href = window.GAME_SERVER.replace(/[/]+$/, '') + '/race/';
