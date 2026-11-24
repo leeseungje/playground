@@ -27,8 +27,8 @@ npm start
 
 ```
 홀덤 서버가 켜졌어요.
-  내 PC:   http://localhost:3000
-  사내망:  http://172.x.x.x:3000   ← 이 주소를 동료에게 공유하세요
+  내 PC:   http://localhost:7777
+  사내망:  http://172.x.x.x:7777   ← 이 주소를 동료에게 공유하세요
 ```
 
 포트를 바꾸려면 `PORT=4000 npm start`(PowerShell은 `$env:PORT=4000; npm start`)로 실행하세요.

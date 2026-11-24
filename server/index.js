@@ -7,7 +7,7 @@ import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import { Room } from './game.js';
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 7777;
 const MAX_ROOMS = 200;
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 const MIME = {
@@ -163,6 +163,11 @@ setInterval(() => cleanupRooms(), 60_000).unref();
 
 // 타이머 안에서 예상 못 한 오류가 나도 다른 방 게임이 멈추지 않게 서버는 살려 둔다
 process.on('uncaughtException', (e) => console.error('[uncaught]', e));
+
+server.on('error', (e) => {
+  console.error(e.code === 'EADDRINUSE' ? `포트 ${PORT}을(를) 이미 다른 프로그램이 쓰고 있어요. 다른 포트로 켜 주세요. 예: PORT=7778 npm start` : e);
+  process.exit(1);
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('홀덤 서버가 켜졌어요.');
