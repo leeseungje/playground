@@ -155,3 +155,165 @@ export function play(name, delay = 0, ...args) {
     /* 소리 실패는 게임에 영향 없음 */
   }
 }
+
+// ───────── 경마용 소리 ─────────
+Object.assign(SOUNDS, {
+  /** 출발 신호 나팔 (출주 팡파르) */
+  bugle(t) {
+    const notes = [[392, 0.18], [523.25, 0.18], [659.25, 0.18], [783.99, 0.36], [659.25, 0.14], [783.99, 0.6]];
+    let at = t;
+    for (const [f, d] of notes) {
+      tone(f, at, { type: 'sawtooth', a: 0.02, peak: 0.07, dcy: d });
+      tone(f * 2, at, { type: 'triangle', a: 0.02, peak: 0.05, dcy: d });
+      at += d * 0.85;
+    }
+  },
+  /** 게이트 열리는 벨 */
+  gate(t) {
+    for (let i = 0; i < 6; i++) tone(1568 + (i % 2) * 90, t + i * 0.06, { type: 'square', a: 0.002, peak: 0.07, dcy: 0.05 });
+    swish(t + 0.35, { from: 600, to: 200, dur: 0.25, peak: 0.35 });
+  },
+  /** 마권 구매 (인쇄기 + 칩) */
+  ticket(t) {
+    for (let i = 0; i < 5; i++) swish(t + i * 0.035, { from: 5000, to: 3500, dur: 0.025, peak: 0.08 });
+    SOUNDS.chips(t + 0.18, 2);
+  },
+  /** 결과 확정 */
+  result(t) {
+    [523.25, 659.25, 783.99].forEach((f, i) => tone(f, t + i * 0.1, { type: 'triangle', peak: 0.15, dcy: 0.5 }));
+  },
+  /** 적중! 동전 쏟아지는 소리 */
+  jackpot(t) {
+    SOUNDS.win(t);
+    for (let i = 0; i < 10; i++) clink(t + 0.3 + i * 0.05, 0.1);
+  },
+});
+
+// 말발굽·관중 소리는 경주 동안 계속 나므로 따로 켜고 끈다
+let raceLoop = null;
+/** 경주 소리 켜기. 반환된 객체의 set(intensity 0~1, crowd 0~1) 로 세기를 바꾸고 stop() 으로 끈다 */
+export function startRaceAmbience() {
+  stopRaceAmbience();
+  const c = ensure();
+  if (!c || muted) return { set() {}, stop() {} };
+  // 관중 함성: 걸러 낸 잡음을 계속 재생
+  const crowd = noise();
+  crowd.loop = true;
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 900;
+  bp.Q.value = 0.6;
+  const cg = c.createGain();
+  cg.gain.value = 0.0001;
+  crowd.connect(bp).connect(cg).connect(master);
+  crowd.start();
+  // 말발굽: 강도에 따라 간격을 바꿔 가며 '두두둑' 반복
+  let intensity = 0.5;
+  let stopped = false;
+  let next = c.currentTime + 0.05;
+  const hoof = (at, peak) => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(110 + Math.random() * 40, at);
+    o.frequency.exponentialRampToValueAtTime(55, at + 0.07);
+    env(g, at, 0.003, peak, 0.08);
+    o.connect(g).connect(master);
+    o.start(at);
+    o.stop(at + 0.12);
+    swish(at, { from: 1400, to: 500, dur: 0.035, peak: peak * 0.4 });
+  };
+  const tick = () => {
+    if (stopped) return;
+    while (next < c.currentTime + 0.25) {
+      // 갤럽 리듬: 네 박이 한 묶음
+      const gap = 0.07 - intensity * 0.02;
+      for (let k = 0; k < 4; k++) hoof(next + k * gap, 0.12 + intensity * 0.22);
+      next += 4 * gap + 0.16 - intensity * 0.06;
+    }
+    setTimeout(tick, 80);
+  };
+  tick();
+  raceLoop = {
+    set(i, crowdLevel = 0.2) {
+      intensity = Math.max(0, Math.min(1, i));
+      cg.gain.setTargetAtTime(0.02 + crowdLevel * 0.35, c.currentTime, 0.4);
+    },
+    stop() {
+      stopped = true;
+      cg.gain.setTargetAtTime(0.0001, c.currentTime, 0.6);
+      setTimeout(() => {
+        try {
+          crowd.stop();
+        } catch {
+          /* 이미 멈춤 */
+        }
+      }, 2500);
+    },
+  };
+  return raceLoop;
+}
+export function stopRaceAmbience() {
+  raceLoop?.stop();
+  raceLoop = null;
+}
+
+// ───────── 경주 돌발 이벤트 소리 ─────────
+Object.assign(SOUNDS, {
+  ev_boost(t, kind) {
+    if (kind === '방귀 부스트') {
+      // 뿌웅~ (낮은 톱니파가 떨리며 내려감)
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(110, t);
+      o.frequency.exponentialRampToValueAtTime(55, t + 0.5);
+      const lfo = ctx.createOscillator();
+      const lg = ctx.createGain();
+      lfo.frequency.value = 28;
+      lg.gain.value = 18;
+      lfo.connect(lg).connect(o.frequency);
+      env(g, t, 0.02, 0.18, 0.5);
+      o.connect(g).connect(master);
+      o.start(t);
+      lfo.start(t);
+      o.stop(t + 0.6);
+      lfo.stop(t + 0.6);
+    }
+    // 휘이잉 가속
+    const o2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    o2.type = 'triangle';
+    o2.frequency.setValueAtTime(300, t + 0.05);
+    o2.frequency.exponentialRampToValueAtTime(1400, t + 0.55);
+    env(g2, t + 0.05, 0.05, 0.1, 0.5);
+    o2.connect(g2).connect(master);
+    o2.start(t);
+    o2.stop(t + 0.7);
+    swish(t + 0.1, { from: 800, to: 4000, dur: 0.45, peak: 0.2 });
+  },
+  ev_fall(t) {
+    tone(90, t, { type: 'sine', a: 0.003, peak: 0.6, dcy: 0.25 });
+    swish(t, { from: 1200, to: 200, dur: 0.3, peak: 0.35 });
+    // 관중 "오오~"
+    tone(220, t + 0.15, { type: 'sawtooth', a: 0.08, peak: 0.04, dcy: 0.7 });
+    tone(196, t + 0.15, { type: 'sawtooth', a: 0.08, peak: 0.04, dcy: 0.7 });
+  },
+  ev_bump(t) {
+    const o = tone(180, t, { type: 'square', a: 0.002, peak: 0.18, dcy: 0.15 });
+    o.frequency.exponentialRampToValueAtTime(70, t + 0.15);
+    swish(t, { from: 2000, to: 600, dur: 0.08, peak: 0.3 });
+  },
+  ev_sleep(t) {
+    for (let i = 0; i < 2; i++) {
+      const o = tone(140, t + i * 0.45, { type: 'sine', a: 0.15, peak: 0.08, dcy: 0.3 });
+      o.frequency.linearRampToValueAtTime(190, t + i * 0.45 + 0.3);
+    }
+  },
+  ev_reverse(t) {
+    const o = tone(1200, t, { type: 'square', a: 0.002, peak: 0.07, dcy: 0.35 });
+    o.frequency.exponentialRampToValueAtTime(300, t + 0.35);
+    tone(880, t + 0.4, { type: 'sine', peak: 0.1, dcy: 0.15 });
+    tone(1320, t + 0.5, { type: 'sine', peak: 0.1, dcy: 0.2 });
+  },
+});

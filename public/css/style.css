@@ -1067,3 +1067,6 @@ input:focus { border-color: var(--gold); }
   .hide-sm { display: none; }
   .tb-right .btn:not(.icon) { padding: 0 9px; }
 }
+
+.game-switch { text-align: center; color: var(--gold); font-size: 13px; text-decoration: none; margin-top: 4px; }
+.game-switch:hover { text-decoration: underline; }

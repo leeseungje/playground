@@ -8,7 +8,14 @@ export function el(tag, attrs = {}, ...children) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') n.setAttribute('class', v);
-    else if (k === 'style' && typeof v === 'object') Object.assign(n.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      // CSS 변수(--x)는 style 속성 대입으로 안 들어가므로 setProperty 로 넣는다
+      for (const [prop, val] of Object.entries(v)) {
+        if (val == null) continue;
+        if (prop.startsWith('--')) n.style.setProperty(prop, String(val));
+        else n.style[prop] = val;
+      }
+    }
     else if (k === 'dataset') Object.assign(n.dataset, v);
     else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
     else n.setAttribute(k, v === true ? '' : v);

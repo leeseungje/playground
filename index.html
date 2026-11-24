@@ -47,6 +47,8 @@
         text-decoration: none;
       }
       a.btn:hover { background: #ffd469; }
+      a.btn.race { margin-top: 10px; background: #1f6b47; color: #fff; }
+      a.btn.race:hover { background: #26805a; }
       .room { margin: 0 0 14px; font-size: 15px; }
       .room strong { color: var(--accent); letter-spacing: 3px; }
       .note { margin: 20px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: left; }
@@ -60,6 +62,7 @@
       <p class="sub">가상 칩으로 즐기는 텍사스 홀덤 · 딜러는 NPC가 맡아요<br />내 패는 나만 보여요</p>
       <p class="room" id="room" hidden></p>
       <a class="btn" id="go" href="#">게임 입장</a>
+      <a class="btn race" id="goRace" href="#">🏇 사내 경마장</a>
       <div class="countdown" id="countdown"></div>
       <p class="note">
         회사 네트워크(사내망)에 연결된 PC에서만 들어갈 수 있어요.<br />
@@ -73,6 +76,7 @@
         var room = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
         var target = window.GAME_SERVER.replace(/\/+$/, '') + '/' + (room ? '?room=' + room : '');
         document.getElementById('go').href = target;
+        document.getElementById('goRace').href = window.GAME_SERVER.replace(//+$/, '') + '/race/';
         document.getElementById('server').textContent = window.GAME_SERVER;
         if (room) {
           // 초대 링크로 들어오면 바로 그 방으로 보낸다
