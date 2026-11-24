@@ -1,6 +1,16 @@
-# Texas Hold'em (사내망용)
+# 🎮 사내 플레이그라운드 (playground)
 
-가상 칩으로 동료들과 즐기는 텍사스 홀덤입니다. 실제 돈이나 환전 가능한 포인트는 쓰지 않습니다.
+사내망에서 동료들과 즐기는 게임 모음입니다. 가상 칩·점수만 쓰고 실제 돈이나 환전 가능한 포인트는 쓰지 않습니다.
+
+| 게임 | 주소 (서버 PC 기준) |
+|---|---|
+| ♠ 텍사스 홀덤 | `http://서버주소:7777/` |
+| 🏇 사내 경마 | `http://서버주소:7777/race/` |
+| 🕵️ 라이어 찾기 | `http://서버주소:7777/liar/` |
+
+입구 페이지: https://leeseungje.github.io/playground/
+
+## ♠ 텍사스 홀덤
 
 - 방을 만들고 초대 링크를 Teams 채팅방에 붙여 넣으면 같이 할 수 있어요.
 - 내 패는 나만 보입니다. 다른 사람의 패는 쇼다운이나 올인 공개 전까지 **서버가 아예 보내지 않습니다.**
@@ -30,9 +40,10 @@
 
 ## 입구 페이지 (GitHub Pages)
 
-https://leeseungje.github.io/TexasHoldem/ 는 게임 서버로 안내하는 입구입니다. 저장소 루트의 `index.html` 이 그 페이지예요.
+https://leeseungje.github.io/playground/ 는 게임을 고르고 서버로 안내하는 입구입니다. 저장소 루트의 `index.html` 이 그 페이지예요.
 
-- `?room=코드` 를 붙이면 3초 뒤 그 방으로 바로 들어갑니다. 예: `https://leeseungje.github.io/TexasHoldem/?room=AB12`
+- 게임 화면의 「초대 링크 복사」는 이 주소로 링크를 만들어요. 열면 1.5초 뒤 그 게임의 방으로 바로 들어갑니다.
+  - 홀덤 `?room=AB12`, 경마 `?game=race&room=AB12`, 라이어 `?game=liar&room=AB12` (서버 포트가 다르면 `&port=7778`)
 - 서버 PC의 IP가 바뀌면 `index.html` 의 `GAME_SERVER` 값만 고쳐서 올리면 됩니다.
 - Pages는 **main 브랜치 / (root)** 에서 배포합니다 (Settings → Pages → Deploy from a branch).
 

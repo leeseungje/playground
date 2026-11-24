@@ -3,15 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>사내 홀덤</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
+    <title>사내 플레이그라운드</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>" />
     <!--
-      GitHub Pages 입구 페이지.
+      GitHub Pages 입구 페이지 (https://leeseungje.github.io/playground/).
       게임은 사내 PC에서 돌아가는 서버(npm start)에서 진행되고, 이 페이지는 그 서버로 안내만 한다.
-      서버 PC의 IP가 바뀌면 아래 GAME_SERVER 만 고치면 된다.
+      서버 PC의 IP나 포트가 바뀌면 아래 GAME_SERVER 만 고치면 된다.
+      초대 링크: ?room=코드 (홀덤), ?game=race&room=코드 (경마), ?game=liar&room=코드 (라이어), 필요하면 &port=번호
     -->
     <script>
       window.GAME_SERVER = 'http://172.20.62.12:7777';
+      // 라이어 찾기는 7777 서버를 재시작하기 전까지 7778 에서 돌아간다
+      window.LIAR_PORT = '7778';
     </script>
     <style>
       :root { --bg: #0f1714; --panel: #18231f; --line: #2b3a34; --text: #e8efe9; --muted: #93a59b; --accent: #f1c04b; }
@@ -22,48 +25,54 @@
         display: grid;
         place-items: center;
         padding: 16px;
-        background: radial-gradient(ellipse at top, #1f3a2e, var(--bg) 60%);
+        background: radial-gradient(ellipse at top, #24364a, var(--bg) 60%);
         color: var(--text);
         font-family: 'Pretendard', 'Malgun Gothic', system-ui, sans-serif;
       }
-      .card {
-        width: min(440px, 100%);
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 32px 28px;
-        text-align: center;
-      }
+      .card { width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 32px 28px; text-align: center; }
       h1 { margin: 0 0 6px; font-size: 30px; }
       .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.5; }
-      a.btn {
-        display: block;
-        padding: 14px;
-        border-radius: 10px;
-        background: var(--accent);
-        color: #2a2100;
-        font-weight: 800;
-        font-size: 17px;
+      .games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      a.game {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        padding: 18px 10px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
         text-decoration: none;
+        transition: transform 0.12s, border-color 0.15s;
       }
-      a.btn:hover { background: #ffd469; }
-      a.btn.race { margin-top: 10px; background: #1f6b47; color: #fff; }
-      a.btn.race:hover { background: #26805a; }
-      .room { margin: 0 0 14px; font-size: 15px; }
-      .room strong { color: var(--accent); letter-spacing: 3px; }
-      .note { margin: 20px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: left; }
+      a.game:hover { transform: translateY(-3px); border-color: var(--accent); }
+      a.game .ico { font-size: 40px; }
+      a.game b { font-size: 16px; }
+      a.game small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+      .invited { display: none; margin-bottom: 18px; padding: 16px; border-radius: 14px; background: rgba(241, 192, 75, 0.12); border: 1px solid rgba(241, 192, 75, 0.45); }
+      .invited.show { display: block; }
+      .invited strong { color: var(--accent); letter-spacing: 3px; }
+      .invited a { display: inline-block; margin-top: 10px; padding: 10px 22px; border-radius: 10px; background: var(--accent); color: #2a2100; font-weight: 800; text-decoration: none; }
+      .note { margin: 22px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: left; }
       .note code { color: var(--text); }
-      .countdown { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+      @media (max-width: 480px) { .games { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
     <main class="card">
-      <h1>♠ 사내 홀덤</h1>
-      <p class="sub">가상 칩으로 즐기는 텍사스 홀덤 · 딜러는 NPC가 맡아요<br />내 패는 나만 보여요</p>
-      <p class="room" id="room" hidden></p>
-      <a class="btn" id="go" href="#">게임 입장</a>
-      <a class="btn race" id="goRace" href="#">🏇 사내 경마장</a>
-      <div class="countdown" id="countdown"></div>
+      <h1>🎮 사내 플레이그라운드</h1>
+      <p class="sub">가상 칩·점수로 동료들과 가볍게 즐기는 게임 모음</p>
+      <div class="invited" id="invited">
+        <div id="inviteText"></div>
+        <div id="countdown" style="color: var(--muted); font-size: 13px; margin-top: 6px"></div>
+        <a id="inviteGo" href="#">지금 입장</a>
+      </div>
+      <div class="games">
+        <a class="game" id="gHoldem" href="#"><span class="ico">♠</span><b>텍사스 홀덤</b><small>NPC 딜러 · 토너먼트</small></a>
+        <a class="game" id="gRace" href="#"><span class="ico">🏇</span><b>사내 경마</b><small>마권 7종 · 실황 중계</small></a>
+        <a class="game" id="gLiar" href="#"><span class="ico">🕵️</span><b>라이어 찾기</b><small>제시어 추리 파티 게임</small></a>
+      </div>
       <p class="note">
         회사 네트워크(사내망)에 연결된 PC에서만 들어갈 수 있어요.<br />
         「사이트에 연결할 수 없음」이 뜨면 서버 PC가 꺼져 있거나 사내망이 아닌 거예요.<br />
@@ -72,35 +81,39 @@
     </main>
     <script>
       (function () {
+        var base = window.GAME_SERVER.replace(/[/]+$/, '');
+        var withPort = function (port) {
+          return port ? base.replace(/:[0-9]+$/, '') + ':' + port : base;
+        };
+        var GAMES = {
+          holdem: { path: '/', name: '♠ 텍사스 홀덤', port: '' },
+          race: { path: '/race/', name: '🏇 사내 경마', port: '' },
+          liar: { path: '/liar/', name: '🕵️ 라이어 찾기', port: window.LIAR_PORT || '' },
+        };
+        document.getElementById('gHoldem').href = withPort(GAMES.holdem.port) + GAMES.holdem.path;
+        document.getElementById('gRace').href = withPort(GAMES.race.port) + GAMES.race.path;
+        document.getElementById('gLiar').href = withPort(GAMES.liar.port) + GAMES.liar.path;
+        document.getElementById('server').textContent = base;
+
+        // 초대 링크로 들어오면 그 게임의 방으로 바로 보낸다
         var params = new URLSearchParams(location.search);
         var room = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-        var game = params.get('game');
-        var paths = { race: '/race/', liar: '/liar/' };
-        var names = { race: '🏇 사내 경마', liar: '🕵️ 라이어 찾기' };
-        var path = paths[game] || '/';
-        // 기본 서버 주소의 포트만 바꿀 수 있게 (숫자만 허용)
-        var server = window.GAME_SERVER.replace(/[/]+$/, '');
-        var port = (params.get('port') || '').replace(/[^0-9]/g, '').slice(0, 5);
-        if (port) server = server.replace(/:[0-9]+$/, '') + ':' + port;
-        var target = server + path + (room ? '?room=' + room : '');
-        document.getElementById('go').href = target;
-        document.getElementById('goRace').href = window.GAME_SERVER.replace(/[/]+$/, '') + '/race/';
-        document.getElementById('server').textContent = window.GAME_SERVER;
-        if (room) {
-          // 초대 링크로 들어오면 바로 그 방으로 보낸다
-          var roomEl = document.getElementById('room');
-          roomEl.hidden = false;
-          roomEl.innerHTML = '';
-          roomEl.append((names[game] || '♠ 텍사스 홀덤') + ' · 초대받은 방 ');
-          var strong = document.createElement('strong');
-          strong.textContent = room;
-          roomEl.append(strong);
-          document.getElementById('go').textContent = '지금 입장';
-          document.getElementById('countdown').textContent = '잠시 뒤 자동으로 입장해요…';
-          setTimeout(function () {
-            location.href = target;
-          }, 1500);
-        }
+        if (!room) return;
+        var game = GAMES[params.get('game')] ? params.get('game') : 'holdem';
+        var port = (params.get('port') || '').replace(/[^0-9]/g, '').slice(0, 5) || GAMES[game].port;
+        var target = withPort(port) + GAMES[game].path + '?room=' + room;
+        var box = document.getElementById('invited');
+        var text = document.getElementById('inviteText');
+        text.textContent = GAMES[game].name + ' · 초대받은 방 ';
+        var strong = document.createElement('strong');
+        strong.textContent = room;
+        text.appendChild(strong);
+        document.getElementById('inviteGo').href = target;
+        document.getElementById('countdown').textContent = '잠시 뒤 자동으로 입장해요…';
+        box.className = 'invited show';
+        setTimeout(function () {
+          location.href = target;
+        }, 1500);
       })();
     </script>
   </body>

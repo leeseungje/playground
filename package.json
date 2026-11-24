@@ -1,8 +1,8 @@
 {
-  "name": "holdem",
+  "name": "playground",
   "version": "0.1.0",
   "private": true,
-  "description": "사내망에서 친구들과 즐기는 텍사스 홀덤 (가상 칩, NPC 딜러)",
+  "description": "사내망에서 동료들과 즐기는 게임 모음 (홀덤·경마·라이어 찾기, 가상 칩)",
   "type": "module",
   "scripts": {
     "start": "node server/index.js",
