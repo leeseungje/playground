@@ -176,7 +176,55 @@ function showGame() {
   if (!$('#game').classList.contains('hidden')) return;
   $('#lobby').classList.add('hidden');
   $('#game').classList.remove('hidden');
+  if (!storage.get('race.guideSeen', false)) setTimeout(openGuide, 600);
   requestAnimationFrame(() => track.fit());
+}
+
+// ───────── 마권 사는 법 안내 ─────────
+function openGuide() {
+  const ex = (type, combo, text) => el('tr', {}, el('th', {}, type), el('td', { class: 'g-ex' }, combo), el('td', {}, text));
+  const body = el(
+    'div',
+    { class: 'guide' },
+    el('h3', {}, '이렇게 사요'),
+    el(
+      'ol',
+      { class: 'g-steps' },
+      el('li', {}, el('b', {}, '승식 고르기'), ' — 오른쪽 위 「단승식」~「삼쌍승식」 중 하나를 눌러요. 처음이면 ', el('b', {}, '단승식'), '이 가장 쉬워요.'),
+      el('li', {}, el('b', {}, '말 고르기'), ' — 아래 출주표에서 말 줄을 눌러요. 승식에 따라 1~3마리를 골라요. 순서가 중요한 승식은 누른 순서대로 1착·2착·3착이 돼요.'),
+      el('li', {}, el('b', {}, '금액 정하기'), ' — +10, +50 같은 버튼이나 숫자 칸으로 정해요. 10칩 단위예요.'),
+      el('li', {}, el('b', {}, '「마권 구매」 누르기'), ' — 여러 장을 사도 돼요. 발매 마감 전까지는 「내 마권」에서 ✕로 취소할 수 있어요.'),
+      el('li', {}, el('b', {}, '경주 보기'), ' — 발매가 마감되면 바로 출발해요. 맞히면 경주가 끝날 때 칩이 자동으로 들어와요.'),
+    ),
+    el('h3', {}, '승식 7가지 (예: 1착 3번, 2착 7번, 3착 5번으로 들어왔을 때)'),
+    el(
+      'table',
+      { class: 'g-table' },
+      el('tbody', {},
+        ex('단승식', '3', '1등할 말 한 마리. 가장 쉬워요.'),
+        ex('연승식', '3 · 7 · 5 중 하나', '3등 안에만 들면 적중 (출전 7두 이하면 2등 안). 잘 맞지만 배당이 낮아요.'),
+        ex('복승식', '3 · 7', '1·2등 두 마리, 순서는 상관없어요.'),
+        ex('쌍승식', '3 → 7', '1등·2등을 순서까지 맞혀요.'),
+        ex('복연승식', '3·7, 3·5, 7·5', '고른 두 마리가 모두 3등 안에 들면 적중, 순서 무관.'),
+        ex('삼복승식', '3 · 7 · 5', '1~3등 세 마리, 순서는 상관없어요.'),
+        ex('삼쌍승식', '3 → 7 → 5', '1·2·3등을 순서까지 다 맞혀요. 가장 어렵고 배당이 가장 커요.'),
+      ),
+    ),
+    el('h3', {}, '배당 보는 법'),
+    el(
+      'ul',
+      { class: 'g-tips' },
+      el('li', {}, el('b', {}, '배당 4.0'), '은 100칩을 걸어 맞히면 ', el('b', {}, '400칩'), '을 돌려받는다는 뜻이에요 (건 돈 포함).'),
+      el('li', {}, '배당은 실제 경마처럼 ', el('b', {}, '사람들이 많이 거는 말일수록 낮아지고'), ', 발매가 마감되는 순간 확정돼요. 표의 「인기」 1번이 가장 많이 걸린 말이에요.'),
+      el('li', {}, '출주표의 ', el('b', {}, '부담중량'), '(가벼울수록 유리), ', el('b', {}, '마체중 증감'), '(▲▼가 크면 컨디션 주의), ', el('b', {}, '최근 3전'), ', ⓘ 버튼의 ', el('b', {}, '말·기수 소개'), '를 참고하세요.'),
+      el('li', {}, '경주 중에는 부스트·넘어짐 같은 ', el('b', {}, '돌발 상황'), '이 있어서 인기마도 질 수 있어요!'),
+      el('li', {}, '칩을 다 쓰면 「칩 다시 받기」로 처음 칩을 다시 받을 수 있어요. 가상 칩이라 실제 돈과는 상관없어요.'),
+    ),
+  );
+  const closeBtn = el('button', { class: 'btn primary' }, '알겠어요');
+  const m = modal('🎫 마권 사는 법', el('div', {}, body, el('div', { class: 'modal-actions' }, closeBtn)));
+  closeBtn.addEventListener('click', () => m.close());
+  storage.set('race.guideSeen', true);
 }
 
 // ───────── 상단 ─────────
@@ -476,7 +524,7 @@ function renderSlip() {
   );
   // replaceChildren 에 null 을 넘기면 "null" 글자가 들어가므로 걸러 낸다
   slip.replaceChildren(
-    ...[el('div', { class: 'slip-head' }, el('h2', {}, '마권 구매'), el('div', { class: 'my-chips' }, '내 칩 ', el('b', {}, fmt(me?.chips ?? 0)))),
+    ...[el('div', { class: 'slip-head' }, el('h2', {}, '마권 구매'), el('button', { class: 'guide-btn', onclick: openGuide }, '❓ 마권 사는 법'), el('div', { class: 'my-chips' }, '내 칩 ', el('b', {}, fmt(me?.chips ?? 0)))),
     el('div', { class: 'bt-row' }, types),
     el('p', { class: 'bt-desc' }, bt.desc),
     el('div', { class: 'slots' }, slots),
