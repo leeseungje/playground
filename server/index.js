@@ -8,6 +8,7 @@ import { Server } from 'socket.io';
 import { Room } from './game.js';
 import { RaceRoom } from './race.js';
 import { LiarRoom } from './liar.js';
+import { HwatuRoom } from './hwatu.js';
 
 const PORT = Number(process.env.PORT) || 7777;
 const MAX_ROOMS = 200;
@@ -30,7 +31,7 @@ const server = http.createServer(async (req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     const shared = urlPath.startsWith('/shared/');
     const baseDir = shared ? SHARED_DIR : PUBLIC_DIR;
-    if (urlPath === '/race' || urlPath === '/liar') {
+    if (urlPath === '/race' || urlPath === '/liar' || urlPath === '/hwatu') {
       const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
       res.writeHead(301, { location: `${urlPath}/${q}` }).end();
       return;
@@ -213,6 +214,23 @@ attachGame(io.of('/liar'), {
     hint: (room, pid, msg) => room.submitHint(pid, msg.text),
     vote: (room, pid, msg) => room.vote(pid, String(msg.target)),
     guess: (room, pid, msg) => room.submitGuess(pid, typeof msg.word === 'string' ? msg.word : null),
+    chat: (room, pid, msg) => room.sendChat(pid, msg.text),
+  },
+});
+
+// 화투 (섯다·고스톱)
+attachGame(io.of('/hwatu'), {
+  makeRoom: (code, onChange) => new HwatuRoom(code, { onChange }),
+  dispose: (room) => room.clearTimer(),
+  handlers: {
+    start: (room, pid) => room.start(pid),
+    pause: (room, pid) => room.pause(pid),
+    rebuy: (room, pid) => room.rebuy(pid),
+    settings: (room, pid, msg) => room.updateSettings(pid, msg),
+    bet: (room, pid, msg) => room.bet(pid, msg),
+    play: (room, pid, msg) => room.play(pid, msg),
+    choose: (room, pid, msg) => room.choose(pid, msg),
+    goStop: (room, pid, msg) => room.goStop(pid, msg),
     chat: (room, pid, msg) => room.sendChat(pid, msg.text),
   },
 });

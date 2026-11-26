@@ -9,7 +9,7 @@
       GitHub Pages 입구 페이지 (https://leeseungje.github.io/playground/).
       게임은 사내 PC에서 돌아가는 서버(npm start)에서 진행되고, 이 페이지는 그 서버로 안내만 한다.
       서버 PC의 IP나 포트가 바뀌면 아래 GAME_SERVER 만 고치면 된다.
-      초대 링크: ?room=코드 (홀덤), ?game=race&room=코드 (경마), ?game=liar&room=코드 (라이어), 필요하면 &port=번호
+      초대 링크: ?room=코드 (홀덤), ?game=race&room=코드 (경마), ?game=liar&room=코드 (라이어), ?game=hwatu&room=코드 (화투), 필요하면 &port=번호
     -->
     <script>
       window.GAME_SERVER = 'http://172.20.62.12:7777';
@@ -30,7 +30,7 @@
       .card { width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 32px 28px; text-align: center; }
       h1 { margin: 0 0 6px; font-size: 30px; }
       .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.5; }
-      .games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .games { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
       a.game {
         display: flex;
         flex-direction: column;
@@ -70,6 +70,7 @@
         <a class="game" id="gHoldem" href="#"><span class="ico">♠</span><b>텍사스 홀덤</b><small>NPC 딜러 · 토너먼트</small></a>
         <a class="game" id="gRace" href="#"><span class="ico">🏇</span><b>사내 경마</b><small>마권 7종 · 실황 중계</small></a>
         <a class="game" id="gLiar" href="#"><span class="ico">🕵️</span><b>라이어 찾기</b><small>제시어 추리 파티 게임</small></a>
+        <a class="game" id="gHwatu" href="#"><span class="ico">🎴</span><b>화투</b><small>섯다 · 고스톱 (2~10명)</small></a>
       </div>
       <p class="note">
         회사 네트워크(사내망)에 연결된 PC에서만 들어갈 수 있어요.<br />
@@ -87,10 +88,12 @@
           holdem: { path: '/', name: '♠ 텍사스 홀덤', port: '' },
           race: { path: '/race/', name: '🏇 사내 경마', port: '' },
           liar: { path: '/liar/', name: '🕵️ 라이어 찾기', port: window.LIAR_PORT || '' },
+          hwatu: { path: '/hwatu/', name: '🎴 화투 (섯다·고스톱)', port: '' },
         };
         document.getElementById('gHoldem').href = withPort(GAMES.holdem.port) + GAMES.holdem.path;
         document.getElementById('gRace').href = withPort(GAMES.race.port) + GAMES.race.path;
         document.getElementById('gLiar').href = withPort(GAMES.liar.port) + GAMES.liar.path;
+        document.getElementById('gHwatu').href = withPort(GAMES.hwatu.port) + GAMES.hwatu.path;
         document.getElementById('server').textContent = base;
 
         // 초대 링크로 들어오면 그 게임의 방으로 바로 보낸다

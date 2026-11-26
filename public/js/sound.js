@@ -317,3 +317,116 @@ Object.assign(SOUNDS, {
     tone(1320, t + 0.5, { type: 'sine', peak: 0.1, dcy: 0.2 });
   },
 });
+
+// ───────── 화투용 소리 ─────────
+/** 두꺼운 종이를 담요 위에 내려치는 소리: 낮은 쿵 + 짧은 딱 */
+function thud(t, { pitch = 120, peak = 0.5 } = {}) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(pitch * 1.8, t);
+  o.frequency.exponentialRampToValueAtTime(pitch * 0.6, t + 0.08);
+  env(g, t, 0.002, peak, 0.11);
+  o.connect(g).connect(master);
+  o.start(t);
+  o.stop(t + 0.2);
+}
+Object.assign(SOUNDS, {
+  /** 화투 내려치기 「탁!」 (세게) */
+  slap(t, power = 1) {
+    thud(t, { pitch: 110, peak: 0.55 * power });
+    swish(t, { from: 3800, to: 1400, dur: 0.035, peak: 0.45 * power });
+    swish(t + 0.004, { from: 900, to: 400, dur: 0.06, peak: 0.25 * power });
+  },
+  /** 바닥에 살짝 내려놓기 */
+  place(t) {
+    thud(t, { pitch: 150, peak: 0.25 });
+    swish(t, { from: 3000, to: 1500, dur: 0.03, peak: 0.18 });
+  },
+  /** 덱에서 뒤집기 */
+  turnover(t) {
+    swish(t, { from: 1800, to: 4200, dur: 0.07, peak: 0.16 });
+    SOUNDS.place(t + 0.08);
+  },
+  /** 패 먹기: 두 장이 맞부딪히는 탁탁 + 쓸어 담는 소리 */
+  take(t, n = 2) {
+    SOUNDS.slap(t, 0.9);
+    swish(t + 0.12, { from: 2200, to: 700, dur: 0.18, peak: 0.12 });
+    for (let i = 1; i < Math.min(n, 4); i++) SOUNDS.place(t + 0.1 + i * 0.05);
+  },
+  /** 피 뺏기 */
+  steal(t) {
+    swish(t, { from: 5000, to: 1500, dur: 0.12, peak: 0.2 });
+    tone(523.25, t + 0.05, { type: 'triangle', peak: 0.12, dcy: 0.12 });
+    tone(392, t + 0.13, { type: 'triangle', peak: 0.12, dcy: 0.2 });
+  },
+  /** 뻑: 김 빠지는 소리 */
+  ppeok(t) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(330, t);
+    o.frequency.exponentialRampToValueAtTime(110, t + 0.4);
+    env(g, t, 0.01, 0.1, 0.4);
+    o.connect(g).connect(master);
+    o.start(t);
+    o.stop(t + 0.5);
+  },
+  /** 고! 북 두 번 + 상승음 */
+  go(t, n = 1) {
+    thud(t, { pitch: 70, peak: 0.7 });
+    thud(t + 0.16, { pitch: 70, peak: 0.7 });
+    const base = 392 * Math.pow(1.06, Math.min(n, 6));
+    [1, 1.26, 1.5].forEach((m, i) => tone(base * m, t + 0.3 + i * 0.08, { type: 'square', peak: 0.07, dcy: 0.25 }));
+  },
+  /** 스톱 / 판 끝 징 */
+  gong(t) {
+    for (const [f, p] of [[110, 0.3], [164, 0.18], [220, 0.12], [331, 0.06]]) tone(f, t, { type: 'sine', a: 0.01, peak: p, dcy: 2.2 });
+    swish(t, { from: 1200, to: 300, dur: 0.3, peak: 0.2 });
+  },
+  /** 섯다 패 쪼으기 (한 장씩 밀어 보는 소리) */
+  squeeze(t) {
+    swish(t, { from: 900, to: 2600, dur: 0.35, peak: 0.08 });
+  },
+  /** 땡·광땡 등 큰 족보 공개 */
+  big(t) {
+    SOUNDS.slap(t, 1.2);
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + 0.1 + i * 0.07, { type: 'triangle', peak: 0.14, dcy: 0.4 }));
+  },
+});
+
+// ───────── 음성 콜 (브라우저 내장 한국어 음성) ─────────
+let voiceOn = storage.get('voice', true);
+export const isVoiceOn = () => voiceOn;
+export function setVoice(v) {
+  voiceOn = !!v;
+  storage.set('voice', voiceOn);
+  if (!voiceOn) window.speechSynthesis?.cancel();
+}
+let koVoice = null;
+function pickVoice() {
+  const vs = window.speechSynthesis?.getVoices() ?? [];
+  koVoice = vs.find((v) => /ko[-_]KR/i.test(v.lang) && /Heami|SunHi|Yuna|Google/i.test(v.name)) ?? vs.find((v) => /^ko/i.test(v.lang)) ?? null;
+}
+if (window.speechSynthesis) {
+  pickVoice();
+  window.speechSynthesis.addEventListener?.('voiceschanged', pickVoice);
+}
+/** 「고!」「뻑!」처럼 짧게 외친다. 소리를 꺼 두었거나 한국어 음성이 없으면 조용히 넘어간다 */
+export function speak(text, { rate = 1.15, pitch = 1.05 } = {}) {
+  if (muted || !voiceOn || !window.speechSynthesis || !text) return;
+  if (!koVoice) pickVoice();
+  if (!koVoice) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = koVoice;
+    u.lang = koVoice.lang;
+    u.rate = rate;
+    u.pitch = pitch;
+    u.volume = Math.min(1, volume + 0.2);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* 무시 */
+  }
+}

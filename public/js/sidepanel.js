@@ -96,6 +96,8 @@ export function createSidePanel(root, { tabs, send, emptyText = '아직 대화�
   }
 
   return {
+    /** 다른 탭을 코드로 연다 */
+    select,
     /**
      * @param state.me 내 id
      * @param state.chat 채팅 목록

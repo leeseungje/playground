@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b0f0f" />
+    <title>화투 · 섯다·고스톱</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='18' y='6' width='64' height='88' rx='8' fill='%23c8102e'/><text x='50' y='64' font-size='44' text-anchor='middle'>🌸</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/hwatu.css" />
+  </head>
+  <body class="hwatu-page">
+    <section id="lobby" class="lobby hw-lobby">
+      <div class="hw-lobby-deco" id="lobbyDeco" aria-hidden="true"></div>
+      <div class="lobby-card">
+        <div class="brand">
+          <span class="brand-mark hw-mark">花</span>
+          <div>
+            <h1>화투 한 판</h1>
+            <p>섯다 · 고스톱(맞고) · 가상 칩으로 즐겨요</p>
+          </div>
+        </div>
+        <label class="field">
+          <span>닉네임</span>
+          <input id="nameInput" maxlength="12" placeholder="예: 승제" autocomplete="off" />
+        </label>
+        <button id="createBtn" class="btn primary big">새 판 벌이기</button>
+        <div class="divider"><span>초대 코드로 입장</span></div>
+        <div class="join-row">
+          <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" aria-label="초대 코드 4자리" />
+          <button id="joinBtn" class="btn">입장</button>
+        </div>
+        <p id="lobbyError" class="error" role="alert"></p>
+        <ul class="lobby-points">
+          <li>섯다는 2~10명, 고스톱은 2명이면 맞고·3명 이상이면 3명이 치고 나머지는 광을 팔거나 쉬어요.</li>
+          <li>내 패는 나만 보여요. 다른 사람 패는 공개 전까지 서버가 보내지 않아요.</li>
+        </ul>
+        <div class="game-switches">
+          <a class="game-switch" href="/">♠ 홀덤</a>
+          <a class="game-switch" href="/race/">🏇 경마</a>
+          <a class="game-switch" href="/liar/">🕵️ 라이어</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="game" class="game hw-game hidden">
+      <header class="topbar">
+        <div class="tb-left">
+          <span class="brand-mark sm hw-mark">花</span>
+          <div class="room-chip">
+            <span class="muted hide-sm">방</span>
+            <strong id="roomCode"></strong>
+            <button id="copyBtn" class="btn small" title="초대 링크 복사">초대<span class="hide-sm"> 링크 복사</span></button>
+          </div>
+          <div class="hw-mode" id="modeInfo"></div>
+        </div>
+        <div class="tb-right">
+          <div class="phase-chip" id="phaseChip"></div>
+          <button id="rebuyBtn" class="btn hidden">칩 다시 받기</button>
+          <button id="pauseBtn" class="btn hidden">멈추기</button>
+          <button id="startBtn" class="btn primary hidden">게임 시작</button>
+          <button id="rulesBtn" class="btn icon" title="규칙" aria-label="규칙 보기">❓</button>
+          <button id="settingsBtn" class="btn icon" title="방 설정" aria-label="방 설정">⚙</button>
+          <button id="voiceBtn" class="btn icon" title="음성 콜" aria-label="음성 콜 켜기/끄기">🗣</button>
+          <button id="soundBtn" class="btn icon" title="소리" aria-label="소리 켜기/끄기">🔊</button>
+          <button id="leaveBtn" class="btn ghost">나가기</button>
+        </div>
+      </header>
+      <div id="offline" class="offline hidden">서버와 연결이 끊겼어요. 다시 연결하는 중…</div>
+
+      <div class="hw-main">
+        <div class="hw-table" id="table">
+          <div class="hw-seats" id="seats"></div>
+          <div class="hw-dealer" id="dealer"></div>
+          <div class="hw-center" id="center"></div>
+          <div class="hw-me" id="mine"></div>
+          <div class="hw-callout" id="callout" aria-live="polite"></div>
+        </div>
+        <aside class="hw-side" id="sidePanel"></aside>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/js/hwatu/main.js"></script>
+  </body>
+</html>

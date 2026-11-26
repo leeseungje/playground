@@ -75,7 +75,7 @@ export async function copyInvite(link) {
 // GitHub Pages 입구 주소. 초대 링크는 이 주소로 만들고, 입구 페이지가 사내 게임 서버의 방으로 보내 준다.
 export const PAGES_URL = 'https://leeseungje.github.io/playground/';
 
-/** 게임 종류(holdem/race/liar)와 방 코드로 GitHub 도메인 초대 링크를 만든다 */
+/** 게임 종류(holdem/race/liar/hwatu)와 방 코드로 GitHub 도메인 초대 링크를 만든다 */
 export function pagesInvite(game, code) {
   const q = new URLSearchParams();
   if (game !== 'holdem') q.set('game', game);
