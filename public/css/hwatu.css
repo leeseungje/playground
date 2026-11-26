@@ -45,10 +45,11 @@ body.hwatu-page {
   position: relative;
   flex: none;
   width: var(--w);
-  height: calc(var(--w) * 1.6);
-  border-radius: calc(var(--w) * 0.08);
-  background: #191512;
-  padding: calc(var(--w) * 0.045);
+  height: calc(var(--w) * 1.517);
+  border-radius: calc(var(--w) * 0.06);
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
   box-shadow: 0 2px 0 #0b0908, 0 6px 14px rgba(0, 0, 0, 0.45);
   user-select: none;
   transition: transform 0.18s cubic-bezier(0.3, 1.4, 0.5, 1), box-shadow 0.18s, filter 0.2s;
@@ -185,7 +186,8 @@ body.skin-back .hwc.back .hwc-face { background: url('/img/doguri/back.png') cen
 .hseat-jokbo.low { background: rgba(255, 255, 255, 0.12); color: var(--text); }
 .hseat-won { color: #7cf0a4; font-weight: 900; font-size: 14px; }
 .hseat-lost { color: #ff8a80; font-weight: 800; font-size: 13px; }
-.timer-ring { position: absolute; left: 8px; top: 8px; width: 38px; height: 38px; pointer-events: none; }
+.hseat-av { position: relative; }
+.timer-ring { position: absolute; left: -6px; top: -6px; width: calc(100% + 12px); height: calc(100% + 12px); pointer-events: none; overflow: visible; }
 .timer-ring circle { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke 0.3s; }
 .timer-ring.urgent circle { stroke: #ff6b5e; }
 .hseat-score { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }
@@ -413,4 +415,41 @@ body.skin-back .hwc.back .hwc-face { background: url('/img/doguri/back.png') cen
   .hw-game .phase-chip { margin-right: auto; }
   .hw-main { min-width: 0; }
   .hw-table { overflow-x: hidden; }
+}
+
+/* ───────── 패 모션 ───────── */
+.mv-fly { position: fixed !important; left: 0; top: 0; z-index: 60; pointer-events: none; margin: 0 !important; will-change: transform; }
+.mv-fly.hwc, .mv-3d { box-shadow: 0 14px 28px rgba(0, 0, 0, 0.55); }
+.mv-3d { width: var(--w); height: calc(var(--w) * 1.517); transform-style: preserve-3d; border-radius: calc(var(--w) * 0.08); }
+.mv-3d > .hwc.md { --w: inherit; position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: none; }
+.mv-3d > .mv-back { transform: rotateY(180deg); }
+.mv-hidden { visibility: hidden !important; }
+.mv-ring { position: fixed; z-index: 59; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 3px solid rgba(255, 244, 214, 0.9); pointer-events: none; animation: mvRing 0.5s ease-out forwards; }
+.mv-ring.big { border-color: rgba(255, 210, 120, 0.95); }
+@keyframes mvRing { from { transform: scale(0.4); opacity: 1; } to { transform: scale(5); opacity: 0; } }
+.me-hand .hwc.playable:active { transform: translateY(-20px) scale(1.06); }
+
+/* 실제 화투 그림 */
+.hwc-face { background: #fff; border-radius: 0; }
+.hwc-img { width: 100%; height: 100%; display: block; object-fit: fill; pointer-events: none; user-select: none; }
+.hwc.back { background: #b3121f; padding: calc(var(--w) * 0.05); }
+.hwc.back .hwc-face { border-radius: calc(var(--w) * 0.03); }
+
+/* ───────── 한 화면 배치: 상대 자리 / (딜러 + 바닥) / 내 패 ───────── */
+@media (min-width: 1001px) {
+  .hw-table { height: calc(100vh - 56px); height: calc(100dvh - 56px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: 12px 16px 12px; }
+  .hw-seats { max-height: 34vh; overflow: auto; }
+  .hw-mid { min-height: 0; display: flex; align-items: center; gap: 18px; }
+  .hw-dealer { flex: none; width: 250px; }
+  .hd { flex-direction: column; gap: 8px; }
+  .hd-bubble::before { left: 50%; top: -9px; transform: translateX(-50%); border: 9px solid transparent; border-bottom-color: #fdf7ea; border-top: 0; }
+  .hd-bubble { font-size: 14px; text-align: center; }
+  .hw-center { min-height: 0; height: 100%; overflow: auto; justify-content: center; }
+  .hw-me { padding: 10px 14px; }
+}
+@media (min-width: 1001px) {
+  .hw-seats { padding-top: 10px; }
+  .floor .hwc.md { --w: 68px; }
+  .deck-pile .hwc.md { --w: 68px; }
+  .deck-pile { width: 74px; height: 110px; }
 }

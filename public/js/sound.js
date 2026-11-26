@@ -430,3 +430,73 @@ export function speak(text, { rate = 1.15, pitch = 1.05 } = {}) {
     /* 무시 */
   }
 }
+
+// ───────── 화투 「착!」 v2: 샘플을 직접 합성해 두고 재생 ─────────
+// 두꺼운 플라스틱 패가 패 위에 붙는 소리 = 아주 짧은 딱(고역) + 납작한 탁(중역) + 담요 쿵(저역)
+const slapBufs = [];
+function makeSlap(c, seed) {
+  const sr = c.sampleRate;
+  const len = Math.floor(sr * 0.22);
+  const buf = c.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  let lp = 0;
+  let lp2 = 0;
+  let prev = 0;
+  const bodyF = 0.18 + seed * 0.05; // 중역 필터 계수 (패마다 살짝 다르게)
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    const n = Math.random() * 2 - 1;
+    // 딱: 고역 강조(차분) + 3ms 감쇠
+    const hp = n - prev;
+    prev = n;
+    const crack = hp * Math.exp(-t / 0.0035) * 0.9;
+    // 탁: 중역 잡음 + 25ms 감쇠, 두 번째 접촉(3ms 뒤)
+    lp += bodyF * (n - lp);
+    lp2 += 0.5 * (lp - lp2);
+    const body = (lp - lp2) * 3.2 * (Math.exp(-t / 0.025) + (t > 0.003 ? 0.5 * Math.exp(-(t - 0.003) / 0.018) : 0));
+    // 쿵: 아래로 떨어지는 저음
+    const f = 70 + 90 * Math.exp(-t / 0.02);
+    const thump = Math.sin(2 * Math.PI * f * t) * Math.exp(-t / 0.05) * 0.55;
+    d[i] = crack + body + thump;
+  }
+  let peak = 0;
+  for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+  for (let i = 0; i < len; i++) d[i] /= peak || 1;
+  return buf;
+}
+function playBuf(buf, t, gain = 0.8, rate = 1) {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  src.connect(g).connect(master);
+  src.start(t);
+}
+Object.assign(SOUNDS, {
+  /** 착! power 1 = 보통, 1.3 = 세게 */
+  slap(t, power = 1) {
+    if (!slapBufs.length) for (let k = 0; k < 4; k++) slapBufs.push(makeSlap(ctx, k / 3));
+    const buf = slapBufs[Math.floor(Math.random() * slapBufs.length)];
+    playBuf(buf, t, Math.min(1.2, 0.75 * power), 0.92 + Math.random() * 0.16);
+    if (power > 1.15) playBuf(slapBufs[0], t + 0.012, 0.35, 0.8); // 세게 칠 때 겹치는 울림
+  },
+  /** 내려놓기 (가볍게) */
+  place(t) {
+    if (!slapBufs.length) for (let k = 0; k < 4; k++) slapBufs.push(makeSlap(ctx, k / 3));
+    playBuf(slapBufs[2], t, 0.3, 1.35);
+  },
+  /** 패 던지는 바람 소리 */
+  whoosh(t) {
+    swish(t, { from: 700, to: 2600, dur: 0.16, peak: 0.12 });
+  },
+  /** 더미 패 뒤집기: 휙 + 살짝 */
+  turnover(t) {
+    swish(t, { from: 1600, to: 4200, dur: 0.12, peak: 0.13 });
+  },
+  /** 먹은 패 쓸어 담기: 착착 + 쓸리는 소리 */
+  take(t, n = 2) {
+    swish(t, { from: 2400, to: 600, dur: 0.22, peak: 0.12 });
+    for (let i = 0; i < Math.min(n, 4); i++) SOUNDS.place(t + 0.04 + i * 0.045);
+  },
+});

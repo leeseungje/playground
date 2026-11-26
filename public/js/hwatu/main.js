@@ -6,6 +6,7 @@ import { createSidePanel } from '../sidepanel.js';
 import { isMuted, setMuted, play, speak, isVoiceOn, setVoice } from '../sound.js';
 import { cardEl, backEl, groupCaptured, loadSkin } from './card.js';
 import { createDealer } from './dealer.js';
+import { snapshot, animateTurn, animateDeal, finishAll, shake } from './motion.js';
 import { card, SEOTDA_TABLE, SEOTDA_SPECIAL_TABLE, evalSeotda } from '/shared/hwatu.js';
 
 /** null·false 를 빼고 자식을 바꾼다 (replaceChildren 은 null 을 글자로 넣는다) */
@@ -58,6 +59,9 @@ socket.on('kicked', () => {
   toast('방에서 나가게 됐어요', 'error');
 });
 socket.on('state', (s) => {
+  finishAll();
+  const sameGostop = state?.game?.kind === 'gostop' && s.game?.kind === 'gostop' && state.gameNo === s.gameNo;
+  const snap = sameGostop ? snapshot(s.me) : null;
   prev = state;
   state = s;
   receivedAt = performance.now();
@@ -65,6 +69,7 @@ socket.on('state', (s) => {
   showGame();
   effects();
   render();
+  if (snap) animateTurn(snap, prev.game, state.game);
 });
 
 // ───────── 입장 ─────────
@@ -297,16 +302,11 @@ function effects() {
         if (f.pid === state.me) play('jackpot', 900);
         break;
       case 'slap':
-        play('slap', delay);
-        break;
       case 'turnover':
-        play('turnover', delay + 260);
-        break;
       case 'take':
-        play('take', delay + 520, f.n);
-        break;
+        break; // 패 모션(motion.js)이 부딪히는 순간에 소리를 낸다
       case 'steal':
-        play('steal', delay + 760);
+        play('steal', 1300);
         break;
       case 'go':
         dealer.mood('happy');
@@ -342,14 +342,15 @@ function effects() {
         break;
       default:
         if (CALL[f.name]) {
+          if (['jjok', 'ttadak', 'sseul', 'bomb', 'chongtong'].includes(f.name)) setTimeout(() => shake(document.querySelector('.hw-table'), 1.4), 950);
           const [text, voice, cls] = CALL[f.name];
           setTimeout(() => {
             callout(text, who, cls);
             speak(voice);
-          }, f.name === 'shake' || f.name === 'bomb' || f.name === 'chongtong' || f.name === 'nagari' ? 0 : 600);
-          if (f.name === 'ppeok') play('ppeok', 650);
+          }, f.name === 'shake' || f.name === 'chongtong' || f.name === 'nagari' ? 0 : 950);
+          if (f.name === 'ppeok') play('ppeok', 1000);
           else if (f.name === 'nagari') play('gong');
-          else play('big', 600);
+          else play('big', 950);
         }
     }
   }
@@ -358,6 +359,11 @@ function effects() {
   const pg = prev?.game;
   if (g && g.turn === state.me && (pg?.turn !== state.me || pg?.phase !== g.phase) && g.phase !== 'result') play('turn', 300);
 }
+
+const rectFrom = (n) => {
+  const r = n?.getBoundingClientRect();
+  return r && r.width ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+};
 
 /** 딜러 손에서 각 자리로 카드가 날아간다 */
 function dealAnimation(f) {
@@ -368,13 +374,10 @@ function dealAnimation(f) {
   if (g.kind === 'seotda') {
     for (const id of g.order) if (!g.folded.includes(id)) targets.push(seatOf(id));
   } else {
-    // 고스톱: 한 사람에게 몇 장씩 세 바퀴 + 바닥
-    const floor = document.querySelector('.floor');
-    for (let r = 0; r < 3; r++) {
-      for (const id of g.order) targets.push(seatOf(id));
-      if (floor) targets.push(floor);
-    }
+    // 고스톱: 상대에게는 뒷면을 날리고, 바닥과 내 손패는 한 장씩 깔며 뒤집는다
+    for (let r = 0; r < 3; r++) for (const id of g.order) if (id !== state.me) targets.push(seatOf(id));
     if (g.sale) targets.push(document.querySelector(`.hseat[data-pid="${g.sale.seller}"]`));
+    animateDeal(rectFrom(document.querySelector('.hd-deck')));
   }
   dealer.deal(targets.filter(Boolean), { gap: g.kind === 'seotda' ? 120 : 70 });
   if (g.kind === 'seotda') setTimeout(() => play('squeeze'), targets.length * 120 + 200);
@@ -414,10 +417,6 @@ function render() {
   const s = state;
   $('#roomCode').textContent = s.code;
   const g = G();
-  // 새로 먹은 패·바닥에 새로 놓인 패 (애니메이션용)
-  const pg = prev?.game?.kind === 'gostop' ? prev.game : null;
-  const prevCapt = new Set(pg ? Object.values(pg.captured).flat() : []);
-  freshCapt = new Set(g?.kind === 'gostop' ? Object.values(g.captured).flat().filter((c) => pg && !prevCapt.has(c)) : []);
   const modeName = s.settings.mode === 'seotda' ? '🎴 섯다' : '🌸 고스톱';
   const stake = s.settings.mode === 'seotda' ? `학교 ${fmt(s.settings.ante)}` : `점당 ${fmt(s.settings.pointChips)} · 조커 ${s.settings.jokers}장`;
   put($('#modeInfo'), el('b', {}, modeName), ` · ${stake}${s.gameNo ? ` · ${s.gameNo}번째 판` : ''}`, s.settings.mode === 'gostop' && s.nagari > 1 ? el('span', { class: 'x2' }, ` · 나가리 ${s.nagari}배`) : null);
@@ -467,8 +466,7 @@ function renderSeats() {
         'div',
         { class: cls, 'data-pid': id },
         el('div', { class: 'hseat-tags' }, tags.map(([t, c]) => el('span', { class: c }, t))),
-        g?.turn === id && g.phase !== 'result' ? timerRing() : null,
-        el('div', { class: 'hseat-head' }, el('div', { class: 'hseat-av', style: { '--hue': hueOf(name) } }, initial(name)), el('div', { style: { minWidth: 0 } }, el('div', { class: 'hseat-name' }, name + (id === s.me ? ' (나)' : '')), el('div', { class: 'hseat-chips' }, `🪙 ${fmt(p?.chips ?? 0)}`))),
+        el('div', { class: 'hseat-head' }, el('div', { class: 'hseat-av', style: { '--hue': hueOf(name) } }, initial(name), g?.turn === id && g.phase !== 'result' ? timerRing() : null), el('div', { style: { minWidth: 0 } }, el('div', { class: 'hseat-name' }, name + (id === s.me ? ' (나)' : '')), el('div', { class: 'hseat-chips' }, `🪙 ${fmt(p?.chips ?? 0)}`))),
         ...body,
       );
     }),
@@ -497,21 +495,19 @@ function seotdaSeat(id) {
   return out;
 }
 
-function captGroups(ids, size = 'xs') {
+function captGroups(ids, size = 'xs', pid = '') {
   const gp = groupCaptured(ids);
   const labels = [['gwang', '광'], ['yeol', '열'], ['tti', '띠'], ['pi', '피']];
   return el(
     'div',
-    { class: 'capt' },
+    { class: 'capt', 'data-cpid': pid },
     labels
       .filter(([k]) => gp[k].length)
-      .map(([k, label]) => el('div', { class: 'capt-group' }, el('div', { class: 'hw-stack' }, gp[k].map((c) => cardEl(c, { size, cls: freshCapt.has(c) ? 'new' : '' }))), el('label', {}, `${label} `, el('b', {}, k === 'pi' ? piLabel(gp.pi) : gp[k].length)))),
+      .map(([k, label]) => el('div', { class: 'capt-group' }, el('div', { class: 'hw-stack' }, gp[k].map((c) => cardEl(c, { size }))), el('label', {}, `${label} `, el('b', {}, k === 'pi' ? piLabel(gp.pi) : gp[k].length)))),
   );
 }
 const piLabel = (ids) => ids.reduce((s, c) => s + (card(c).kind === 'ssangpi' || card(c).joker ? 2 : 1), 0);
 
-let freshCapt = new Set();
-let freshFloor = new Set();
 function gostopSeat(id) {
   const g = G();
   const out = [];
@@ -525,7 +521,7 @@ function gostopSeat(id) {
   if (id !== state.me) {
     const h = g.hands[id];
     out.push(el('div', { class: 'hseat-cards backs' }, typeof h === 'number' ? Array.from({ length: Math.min(h, 10) }, () => backEl({ size: 'xs' })) : h.map((c) => cardEl(c, { size: 'xs' })), typeof h === 'number' ? el('span', { class: 'muted', style: { fontSize: '11px', marginLeft: '4px' } }, `${h}장`) : null));
-    out.push(captGroups(g.captured[id]));
+    out.push(captGroups(g.captured[id], 'xs', id));
   }
   if (g.phase === 'result' && g.result.winner) {
     const pay = g.result.payments.find((x) => x.from === id);
@@ -589,9 +585,6 @@ function seotdaCenter() {
 
 function gostopCenter() {
   const g = G();
-  const pgame = prev?.game?.kind === 'gostop' ? prev.game : null;
-  const prevFloor = new Set(pgame ? pgame.floor : []);
-  freshFloor = new Set(pgame ? g.floor.filter((c) => !prevFloor.has(c)) : []);
   // 바닥: 달별로 묶기
   const groups = new Map();
   for (const c of g.floor) {
@@ -614,7 +607,7 @@ function gostopCenter() {
                 const sel = selecting?.has(c) && (g.turn === state.me);
                 return cardEl(c, {
                   size: 'md',
-                  cls: `${freshFloor.has(c) ? 'new' : ''} ${sel ? 'selectable' : ''}`,
+                  cls: sel ? 'selectable' : '',
                   attrs: sel ? { onclick: () => pickFloor(c), role: 'button', tabindex: 0 } : {},
                 });
               }),
@@ -767,7 +760,7 @@ function gostopMine() {
   const sc = g.scores[state.me];
   const info = [
     el('div', { class: 'my-jokbo' }, el('b', { class: sc.total >= g.rule.win ? 'top' : '' }, `${sc.total}점`), el('small', {}, `${g.rule.win}점부터 날 수 있어요`), g.goCount[state.me] ? el('span', { class: 'sp' }, `${g.goCount[state.me]}고 중`) : null),
-    captGroups(g.captured[state.me], 'sm'),
+    captGroups(g.captured[state.me], 'sm', state.me),
   ];
   const acts = [];
   if (g.canFlipOnly) acts.push(el('button', { class: 'btn raise', onclick: () => call('play', { flipOnly: true }) }, `🂠 뒤집기만 (${g.skips[state.me]}번 남음)`));
