@@ -58,7 +58,8 @@
 - 조커(보너스 쌍피) 0~4장 (방 설정, 기본 2장): 손에서 내면 바로 먹고 한 장 받아 이어서, 뒤집다 나오면 먹고 한 번 더, 바닥에 깔리면 선이 가져감
 
 ### 카드 그림
-- 전통 화투 그림을 SVG 로 직접 그렸어요 (`public/js/hwatu/art.js`). 한국 화투처럼 11월 오동, 12월 비, 광에는 光 표시
+- 한국 화투 그림: Wikimedia Commons 의 Hwatu SVG (작가 Pk0001, CC BY-SA 4.0). 출처와 라이선스는 `public/img/hwatu/LICENSE.md`
+- 파일 하나에 같은 달 4장이 들어 있어서 `#svgView(viewBox(...))` 로 한 장씩 잘라 써요 (`public/js/hwatu/card.js`)
 - **도구리 스킨**: `public/img/doguri/joker.png`(조커 그림), `public/img/doguri/back.png`(카드 뒷면 그림)을 넣으면 자동으로 바뀌어요
 
 ### 소리
