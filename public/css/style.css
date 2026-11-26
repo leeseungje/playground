@@ -1072,3 +1072,14 @@ input:focus { border-color: var(--gold); }
 .game-switch:hover { text-decoration: underline; }
 
 .invite-input { width: 100%; font-size: 15px; }
+
+/* 강퇴 투표 */
+.kick-bar { display: flex; flex-direction: column; gap: 4px; padding: 6px 12px; background: #3d2a12; border-bottom: 1px solid #7a5523; font-size: 13px; }
+.kick-bar.hidden { display: none; }
+.kick-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; color: #ffe2b0; }
+.kick-row.me { color: #ffb4a8; font-weight: 700; }
+.kick-modal p { margin: 0 0 10px; line-height: 1.5; }
+.kick-modal .dim { opacity: 0.7; font-size: 13px; }
+.seat:not(.me) { cursor: pointer; }
+.btn.danger { background: #a63a2f; border-color: #c9584a; color: #fff; }
+.btn.danger:hover { background: #bd4637; }

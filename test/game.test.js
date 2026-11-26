@@ -589,3 +589,62 @@ test('홀덤: 끊긴 사람은 20초 뒤 자리에서 빠짐 (판 도중이면 �
   runUntil(room, clock, () => !room.player(ps[1].id) || room.hand.street === 'done');
   assert.ok(seat.folded || room.hand.street === 'done');
 });
+
+test('강퇴 투표: 과반이 찬성하면 내보내고 같은 토큰으로는 다시 못 들어온다', () => {
+  const { room, ps } = setup(4);
+  const [a, b, c, d] = ps;
+  // d 를 뺀 3명 중 2명이 찬성해야 한다
+  let r = room.voteKick(a.id, d.id);
+  assert.equal(r.voted, true);
+  assert.deepEqual(room.viewFor(b.id).kickVotes.map((v) => [v.name, v.count, v.need, v.mine]), [['P3', 1, 2, false]]);
+  // 다시 누르면 취소, 투표도 사라진다
+  r = room.voteKick(a.id, d.id);
+  assert.equal(r.voted, false);
+  assert.equal(room.viewFor(b.id).kickVotes.length, 0);
+  room.voteKick(a.id, d.id);
+  r = room.voteKick(b.id, d.id);
+  assert.equal(r.kicked, true);
+  assert.equal(r.kickSocket, 's3');
+  assert.ok(!room.player(d.id));
+  assert.ok(room.join({ token: d.token, name: 'P3', socketId: 's9' }).error);
+  assert.equal(room.viewFor(a.id).kickVotes.length, 0);
+  assert.equal(room.voteKick(c.id, c.id).error, '나를 강퇴할 수는 없어요');
+});
+
+test('강퇴 투표: 시간이 지나면 끝나고, 판 중에 강퇴되면 폴드 처리 후 판이 끝나면 빠진다', () => {
+  const { room, clock, ps } = setup(3);
+  const [a, b, c] = ps;
+  room.voteKick(a.id, c.id);
+  assert.equal(room.kickVotes.size, 1);
+  while (clock.step());
+  assert.equal(room.kickVotes.size, 0);
+  room.start(room.hostId);
+  clock.flush(room);
+  const before = chipsOnTable(room);
+  room.voteKick(a.id, c.id);
+  const r = room.voteKick(b.id, c.id);
+  assert.equal(r.kicked, true);
+  assert.equal(room.seatOf(c.id)?.folded ?? true, true);
+  assert.equal(chipsOnTable(room), before);
+  // 판이 끝날 때까지 돌리면 c 는 사라진다
+  for (let i = 0; i < 200 && room.handLive(); i++) {
+    const cur = room.currentSeat();
+    if (cur) room.act(cur.id, 'call') ?? room.act(cur.id, 'check');
+    else if (!clock.step()) break;
+  }
+  room.pause(room.hostId);
+  for (let i = 0; i < 50 && clock.step(); i++);
+  assert.ok(!room.player(c.id));
+  assert.ok(room.join({ token: c.token, name: 'P2', socketId: 's9' }).error);
+});
+
+test('끊긴 사람은 기다렸다가 자리에서 빠지고, 나가면 바로 빠진다', () => {
+  const { room, clock, ps } = setup(3);
+  room.disconnect('s2');
+  assert.ok(room.player(ps[2].id));
+  while (clock.step());
+  assert.ok(!room.player(ps[2].id));
+  room.leave(ps[1].id);
+  assert.ok(!room.player(ps[1].id));
+  assert.equal(room.players.length, 1);
+});

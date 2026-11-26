@@ -12,6 +12,7 @@ export const DEFAULTS = {
   streetPauseMs: 900, // 스트리트 사이 잠깐 멈춤 (칩 모으는 연출 시간)
   runoutStepMs: 1_600, // 올인 후 보드 한 장씩 열기
   nextHandMs: 7_000, // 결과 보여 준 뒤 다음 판
+  kickVoteMs: 60_000, // 강퇴 투표가 열려 있는 시간
 };
 
 /** 방장이 바꿀 수 있는 설정과 허용 범위 */
@@ -140,6 +141,7 @@ export class Room {
   // ───────── 입장·퇴장 ─────────
 
   join({ token, name, socketId }) {
+    if (this.banned?.has(token)) return { error: '투표로 내보내진 방이라 다시 들어갈 수 없어요' };
     let p = this.players.find((x) => x.token === token);
     if (p) {
       const wasAway = !p.connected;
@@ -256,6 +258,8 @@ export class Room {
     p.leaving = true;
     p.connected = false;
     p.socketId = null;
+    this.cancelDrop(p);
+    this.endKickVote(playerId);
     this.say(`${p.name}님이 나갔어요.`);
     // 토너먼트 중에 나가면 기권: 남은 칩은 몰수하고, 지금 남은 인원 기준으로 순위를 준다.
     // (폴드로 판이 끝나며 우승 판정이 먼저 일어날 수 있으므로 폴드 처리보다 앞에서 한다)
@@ -279,6 +283,87 @@ export class Room {
     if (this.hostId === playerId) this.pickNewHost();
     if (!this.handLive()) this.checkTourneyEnd();
     this.changed();
+  }
+
+  // ───────── 강퇴 투표 ─────────
+
+  /** 투표할 수 있는 사람: 접속해 있고 나가는 중이 아닌, 대상이 아닌 사람 */
+  kickVoters(targetId) {
+    return this.players.filter((p) => p.connected && !p.leaving && p.id !== targetId);
+  }
+
+  /** 과반: 투표할 수 있는 사람의 절반보다 많이 */
+  kickNeed(targetId) {
+    return Math.floor(this.kickVoters(targetId).length / 2) + 1;
+  }
+
+  kickCount(targetId) {
+    const v = this.kickVotes?.get(targetId);
+    if (!v) return 0;
+    const ok = new Set(this.kickVoters(targetId).map((p) => p.id));
+    return [...v.voters].filter((id) => ok.has(id)).length;
+  }
+
+  endKickVote(targetId) {
+    const v = this.kickVotes?.get(targetId);
+    if (!v) return;
+    v.cancel?.();
+    this.kickVotes.delete(targetId);
+  }
+
+  /** 강퇴 찬성 (이미 찬성했으면 취소). 과반이 모이면 바로 내보낸다 */
+  voteKick(voterId, targetId) {
+    const voter = this.player(voterId);
+    const target = this.player(targetId);
+    if (!voter || voter.leaving) return { error: '방에 들어가 있지 않아요' };
+    if (!target || target.leaving) return { error: '그런 사람이 없어요' };
+    if (voterId === targetId) return { error: '나를 강퇴할 수는 없어요' };
+    this.kickVotes ??= new Map();
+    let v = this.kickVotes.get(targetId);
+    if (v?.voters.has(voterId)) {
+      v.voters.delete(voterId);
+      if (!v.voters.size) this.endKickVote(targetId);
+      this.say(`${voter.name}님이 ${target.name}님 강퇴 찬성을 취소했어요.`);
+      this.changed();
+      return { ok: true, voted: false };
+    }
+    if (!v) {
+      const ms = this.opt.kickVoteMs;
+      v = { voters: new Set(), endsAt: this.now() + ms, cancel: null };
+      const vote = v;
+      v.cancel = this.schedule(() => {
+        if (this.kickVotes.get(targetId) !== vote) return;
+        this.kickVotes.delete(targetId);
+        const t = this.player(targetId);
+        if (t) this.say(`${t.name}님 강퇴 투표가 과반을 못 넘기고 끝났어요.`);
+        this.changed();
+      }, ms);
+      this.kickVotes.set(targetId, v);
+      this.emit('kickVote', { pid: targetId });
+    }
+    v.voters.add(voterId);
+    const count = this.kickCount(targetId);
+    const need = this.kickNeed(targetId);
+    if (count >= need) return this.kick(targetId);
+    this.say(`${voter.name}님이 ${target.name}님 강퇴에 찬성했어요 (${count}/${need}).`);
+    this.changed();
+    return { ok: true, voted: true };
+  }
+
+  /** 투표로 내보낸다. 같은 탭(토큰)으로는 다시 들어오지 못한다 */
+  kick(targetId) {
+    const t = this.player(targetId);
+    if (!t) return { error: '그런 사람이 없어요' };
+    const socketId = t.socketId;
+    this.endKickVote(targetId);
+    this.banned ??= new Set();
+    this.banned.add(t.token);
+    this.leave(targetId);
+    this.departed.delete(t.token);
+    this.say(`투표로 ${t.name}님을 내보냈어요.`);
+    this.emit('kick', { pid: targetId });
+    this.changed();
+    return { ok: true, kicked: true, kickSocket: socketId };
   }
 
   removePlayer(id) {
@@ -1062,6 +1147,14 @@ export class Room {
       reactions: this.reactions.filter((x) => now - x.at < 4000),
       events: this.events,
       history: this.history,
+      kickVotes: [...(this.kickVotes ?? new Map())].map(([id, v]) => ({
+        target: id,
+        name: this.player(id)?.name ?? '',
+        count: this.kickCount(id),
+        need: this.kickNeed(id),
+        mine: v.voters.has(playerId),
+        msLeft: Math.max(0, v.endsAt - now),
+      })),
       canRebuy: !!me && this.settings.mode === 'cash' && me.chips === 0 && !(mySeat && h.street !== 'done'),
     };
   }

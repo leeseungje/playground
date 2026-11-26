@@ -1,8 +1,8 @@
 /* global io */
-import { $, fmt, toast, session, storage } from './util.js';
+import { $, el, fmt, toast, session, storage } from './util.js';
 import { createTable } from './table.js';
 import { createActions } from './actions.js';
-import { createPanels, openSettings, celebrate } from './panels.js';
+import { createPanels, openSettings, celebrate, modal } from './panels.js';
 import { copyInvite, pagesInvite } from './invite.js';
 import { isMuted, setMuted, play } from './sound.js';
 
@@ -33,7 +33,7 @@ let lastReactionId = 0;
 let fresh = true; // 입장 직후 첫 상태는 연출 없이
 let lanUrls = [];
 
-const table = createTable($('#stageWrap'), {});
+const table = createTable($('#stageWrap'), { onSeatClick: (pid) => openKick(pid) });
 const actions = createActions($('#actions'), { send });
 const panels = createPanels($('#panel'), { send });
 
@@ -47,6 +47,13 @@ socket.on('connect', () => {
   if (code) joinRoom(code, true);
 });
 socket.on('disconnect', () => $('#offline').classList.remove('hidden'));
+socket.on('kicked', () => {
+  session.set('code', null);
+  history.replaceState(null, '', '/');
+  showLobby();
+  lobbyError('투표로 테이블에서 내보내졌어요.');
+  toast('투표로 테이블에서 내보내졌어요.', 'error');
+});
 
 socket.on('state', (s) => {
   s.receivedAt = performance.now();
@@ -60,6 +67,7 @@ socket.on('state', (s) => {
   actions.render(s, evs);
   panels.render(s);
   renderTop();
+  renderKick();
 
   // 좌석 위 말풍선 (채팅·이모지)
   for (const m of s.chat) if (m.id > lastChatId && !firstChat) table.bubble(m.pid, m.text, 'chat');
@@ -124,6 +132,7 @@ $('#nameInput').addEventListener('keydown', (e) => e.key === 'Enter' && ($('#cod
 
 function showLobby() {
   state = null;
+  $('#kickBar').classList.add('hidden');
   $('#lobby').classList.remove('hidden');
   $('#game').classList.add('hidden');
 }
@@ -160,6 +169,54 @@ function renderTop() {
   startBtn.textContent = s.settings.mode === 'tournament' && !t.active ? (t.winnerName ? '새 토너먼트 시작' : '토너먼트 시작') : s.hand ? '게임 이어서 하기' : '게임 시작';
   $('#pauseBtn').classList.toggle('hidden', !isHost || !s.running);
   $('#soundBtn').textContent = isMuted() ? '🔇' : '🔊';
+}
+
+// ───────── 강퇴 투표 (과반이 찬성하면 내보낸다) ─────────
+async function voteKick(pid) {
+  const r = await send('voteKick', { target: pid });
+  if (r.error) return toast(r.error, 'error');
+  if (r.kicked) toast('과반이 찬성해서 내보냈어요');
+  else toast(r.voted ? '강퇴에 찬성했어요' : '찬성을 취소했어요');
+}
+
+function openKick(pid) {
+  if (!state || pid === state.me) return;
+  const p = state.players.find((x) => x.id === pid);
+  if (!p) return;
+  const v = state.kickVotes?.find((x) => x.target === pid);
+  const voters = state.players.filter((x) => x.connected && x.id !== pid).length;
+  const need = v?.need ?? Math.floor(voters / 2) + 1;
+  const body = el(
+    'div',
+    { class: 'kick-modal' },
+    el('p', {}, v ? `강퇴 투표가 진행 중이에요: 찬성 ${v.count}/${need}명` : `접속해 있는 ${voters}명 중 ${need}명 이상이 찬성하면 ${p.name}님을 내보내요.`),
+    el('p', { class: 'dim' }, '내보내진 사람은 같은 창으로 이 방에 다시 들어올 수 없어요. 판 중이면 폴드 처리돼요.'),
+    el(
+      'div',
+      { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'btn ghost', onclick: () => close() }, '닫기'),
+      el('button', { type: 'button', class: `btn ${v?.mine ? '' : 'danger'}`, onclick: () => (close(), voteKick(pid)) }, v?.mine ? '찬성 취소' : v ? '강퇴 찬성' : '강퇴 투표 시작'),
+    ),
+  );
+  const { close } = modal(`${p.name}님 강퇴`, body);
+}
+
+function renderKick() {
+  const bar = $('#kickBar');
+  const list = state?.kickVotes ?? [];
+  bar.classList.toggle('hidden', !list.length);
+  bar.replaceChildren(
+    ...list.map((v) => {
+      const sec = Math.max(0, Math.ceil((v.msLeft - (performance.now() - state.receivedAt)) / 1000));
+      if (v.target === state.me) return el('div', { class: 'kick-row me' }, `⚠️ 나를 내보내자는 투표가 진행 중이에요 (찬성 ${v.count}/${v.need} · ${sec}초)`);
+      return el(
+        'div',
+        { class: 'kick-row' },
+        el('span', {}, `🗳️ ${v.name}님 강퇴 투표 · 찬성 ${v.count}/${v.need} · ${sec}초 남음`),
+        el('button', { class: `btn small ${v.mine ? '' : 'danger'}`, onclick: () => voteKick(v.target) }, v.mine ? '찬성 취소' : '찬성'),
+      );
+    }),
+  );
 }
 
 $('#copyBtn').addEventListener('click', () => copyInvite(pagesInvite('holdem', state.code)));
@@ -208,3 +265,9 @@ window.addEventListener('keydown', (e) => {
     panels.focusChat();
   }
 });
+
+// 강퇴 투표 남은 시간 표시를 1초마다 줄인다
+setInterval(() => {
+  if (!state?.kickVotes?.length) return;
+  renderKick();
+}, 1000);

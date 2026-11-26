@@ -139,7 +139,18 @@ function attachGame(nsp, { makeRoom, handlers, dispose }) {
       on(event, (msg, cb) => {
         const { room, pid } = current();
         if (!room) return reply(cb, { error: '방에 들어가 있지 않아요' });
-        reply(cb, fn(room, pid, msg) ?? {});
+        const res = fn(room, pid, msg) ?? {};
+        // 강퇴된 사람의 화면을 로비로 돌려보낸다
+        if (res.kickSocket) {
+          const out = nsp.sockets.get(res.kickSocket);
+          if (out) {
+            out.data.code = null;
+            out.data.playerId = null;
+            out.emit('kicked', { code: room.code });
+          }
+        }
+        delete res.kickSocket;
+        reply(cb, res);
       });
     on('leave', (msg, cb) => {
       const { room, pid } = current();
@@ -171,6 +182,7 @@ attachGame(io.of('/'), {
     settings: (room, pid, msg) => room.updateSettings(pid, msg),
     chat: (room, pid, msg) => room.sendChat(pid, msg.text),
     react: (room, pid, msg) => room.react(pid, msg.emoji),
+    voteKick: (room, pid, msg) => room.voteKick(pid, typeof msg.target === 'string' ? msg.target : ''),
   },
 });
 
