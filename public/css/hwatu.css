@@ -453,3 +453,72 @@ body.skin-back .hwc.back .hwc-face { background: url('/img/doguri/back.png') cen
   .deck-pile .hwc.md { --w: 68px; }
   .deck-pile { width: 74px; height: 110px; }
 }
+
+/* ═════════ 고스톱 배치 v2 (맞고 게임에서 흔한 구성) ═════════ */
+.hw-seats.gs-mode { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); align-items: start; }
+.hseat.mini { grid-column: span 1; max-width: 220px; padding: 6px 10px; flex-direction: row; align-items: center; opacity: 0.75; }
+.hw-seats.gs-mode:has(.hseat.mini) { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.hseat.gs { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; padding: 10px 14px; background: linear-gradient(180deg, rgba(14, 22, 14, 0.78), rgba(8, 12, 8, 0.7)); border: 1px solid rgba(255, 255, 255, 0.1); }
+.hseat.gs.turn { border-color: var(--gold); }
+.gs-left { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gs-right { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gs-hand { align-items: center; }
+.gs-count { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.gs-score { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+.gs-score b { font: 900 30px/1 'Noto Serif KR', serif; color: #fff; text-shadow: 0 2px 0 #6b0f14; }
+.gs-score b small { font-size: 14px; margin-left: 2px; }
+.gs-score b.hot { color: #ffe08a; text-shadow: 0 2px 0 #6b4a00, 0 0 16px rgba(243, 195, 79, 0.6); }
+.gs-score span { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: rgba(255, 255, 255, 0.1); }
+.gs-score span.go { background: #f3c34f; color: #241800; }
+.gs-score span.pp { background: #2a5bd7; color: #fff; }
+
+/* 먹은 패: 광·열·띠·피 묶음을 가로로 */
+.capt { gap: 14px; }
+.capt-group { flex-direction: column-reverse; align-items: flex-start; }
+.capt-group label { font-size: 11px; font-weight: 700; color: var(--muted); }
+.capt-group label b { color: #ffe08a; font-size: 13px; }
+.hseat .capt .hwc { --w: 34px; }
+.capt-group .hw-stack .hwc + .hwc { margin-left: calc(var(--w) * -0.55); }
+.hw-me .capt .hwc { --w: 40px; }
+
+/* 바닥: 더미를 가운데 두고 둘레 고정 자리 */
+.floor.hw-ring { position: relative; display: block; width: min(100%, 640px); aspect-ratio: 640 / 330; max-width: none; min-height: 0; margin: 0 auto; --fw: clamp(44px, 9.5%, 66px); }
+.floor.hw-ring .floor-group { position: absolute; display: block; width: var(--fw); height: calc(var(--fw) * 1.517); transition: left 0.25s, top 0.25s; }
+.floor.hw-ring .floor-group .hwc { --w: var(--fw); position: absolute; left: 0; top: 0; }
+.floor.hw-ring .floor-group .hwc:nth-child(2) { left: 22%; top: 12%; }
+.floor.hw-ring .floor-group .hwc:nth-child(3) { left: 44%; top: 24%; }
+.floor.hw-ring .floor-group .hwc:nth-child(4) { left: 66%; top: 36%; }
+.floor.hw-ring .floor-group.ppeok::after { top: -10px; right: -12px; z-index: 5; }
+.floor.hw-ring .deck-pile { position: absolute; left: 50%; top: 50%; width: var(--fw); height: calc(var(--fw) * 1.517); transform: translate(-50%, -50%); }
+.floor.hw-ring .deck-pile .hwc { --w: var(--fw); }
+.floor.hw-ring .deck-pile .cnt { bottom: auto; top: 50%; transform: translate(-50%, -50%); z-index: 3; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-weight: 900; font-size: 13px; }
+.floor-wrap { width: 100%; }
+
+/* 내 자리 */
+.gs-me-top { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.gs-me-plate { display: flex; align-items: center; gap: 10px; padding-right: 14px; border-right: 1px solid rgba(255, 255, 255, 0.1); }
+.me-hand.gostop { gap: 8px; flex-wrap: nowrap; justify-content: center; padding-top: 6px; }
+.me-hand.gostop .hwc { --w: clamp(56px, 7vw, 88px); }
+.me-hand.gostop .hwc.match::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #7cf0a4; box-shadow: 0 0 8px #7cf0a4; }
+
+/* 판 가운데 팝업 (고/스톱, 결과) */
+.pop-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 30; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(243, 195, 79, 0.4); }
+.gostop-box.pop-center { background: radial-gradient(ellipse at 50% 0%, #3a2a10, #140c08 70%); padding: 22px 30px; min-width: 340px; animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.gostop-box.pop-center.small { min-width: 0; padding: 12px 20px; top: 18%; }
+.gostop-box.pop-center > b { font-size: 22px; color: #ffe08a; }
+.result-card.gs-res { background: radial-gradient(ellipse at 50% 0%, #4a1414, #140808 70%); min-width: 380px; padding: 24px 30px; animation: resIn 0.5s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.result-card.gs-res.me { background: radial-gradient(ellipse at 50% 0%, #5a4210, #140c04 70%); }
+.res-crown { font-size: 46px; line-height: 1; animation: floaty 2.4s ease-in-out infinite; --r: 0deg; }
+.res-points { display: flex; align-items: baseline; gap: 4px; }
+.res-points b { font: 900 54px/1 'Noto Serif KR', serif; color: #ffe08a; text-shadow: 0 3px 0 #6b4a00, 0 0 30px rgba(243, 195, 79, 0.6); }
+.res-points small { font-size: 18px; color: var(--muted); }
+@keyframes resIn { from { transform: translate(-50%, -50%) scale(0.6); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+.hw-center { position: static; }
+/* 바닥 판을 가운데 칸 높이에 맞춘다 (카드 크기는 판 너비 기준 cqw) */
+.hw-center { overflow: hidden; }
+.floor-wrap { flex: 1; min-height: 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+.floor.hw-ring { width: auto; height: 100%; max-height: 360px; max-width: 100%; aspect-ratio: 640 / 330; container-type: size; --fw: 10.2cqw; }
+@media (max-width: 1000px) {
+  .floor.hw-ring { width: 100%; height: auto; }
+}
+.floor.hw-ring { height: auto; width: 100%; max-height: none; }

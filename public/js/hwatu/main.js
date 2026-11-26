@@ -445,8 +445,12 @@ function seatOrder() {
 function renderSeats() {
   const s = state;
   const g = G();
-  put($('#seats'), 
-    ...seatOrder().map((id) => {
+  const gs = g?.kind === 'gostop';
+  $('#seats').classList.toggle('gs-mode', !!gs);
+  // 고스톱: 판에 들어간 상대만 큰 패널, 나는 아래 내 자리에서 보여 준다
+  const ids = gs ? seatOrder().filter((id) => !(g.order.includes(state.me) && id === state.me)) : seatOrder();
+  put($('#seats'),
+    ...ids.map((id) => {
       const p = s.players.find((x) => x.id === id);
       const inGame = g && g.order.includes(id);
       const name = p?.name ?? '나간 사람';
@@ -457,16 +461,20 @@ function renderSeats() {
       else if (g && !inGame && p) tags.push(['쉼', 'rest']);
       if (p && !p.connected) tags.push(['끊김', 'away']);
       const winner = g?.phase === 'result' && (g.kind === 'seotda' ? g.result.winners.includes(id) : g.result.winner === id);
-      const cls = ['hseat', g?.turn === id ? 'turn' : '', id === s.me ? 'me' : '', g && !inGame ? 'out' : '', g?.kind === 'seotda' && g.folded.includes(id) ? 'folded' : '', winner ? 'winner' : ''].join(' ');
+      const cls = ['hseat', gs ? (inGame ? 'gs' : 'mini') : '', g?.turn === id ? 'turn' : '', id === s.me ? 'me' : '', g && !inGame ? 'out' : '', g?.kind === 'seotda' && g.folded.includes(id) ? 'folded' : '', winner ? 'winner' : ''].join(' ');
       const body = [];
       if (g?.kind === 'seotda' && inGame) body.push(...seotdaSeat(id));
-      if (g?.kind === 'gostop' && inGame) body.push(...gostopSeat(id));
       if (g?.kind === 'gostop' && g.sale?.seller === id && g.sale.cards.length) body.push(el('div', { class: 'hseat-cards' }, g.sale.cards.map((c) => cardEl(c, { size: 'xs' }))));
+      const head = el('div', { class: 'hseat-head' }, el('div', { class: 'hseat-av', style: { '--hue': hueOf(name) } }, initial(name), g?.turn === id && g.phase !== 'result' ? timerRing() : null), el('div', { style: { minWidth: 0 } }, el('div', { class: 'hseat-name' }, name + (id === s.me ? ' (나)' : '')), el('div', { class: 'hseat-chips' }, `🪙 ${fmt(p?.chips ?? 0)}`)));
+      if (gs && inGame) {
+        const parts = gostopPanel(id);
+        return el('div', { class: cls, 'data-pid': id }, el('div', { class: 'hseat-tags' }, tags.map(([t, c]) => el('span', { class: c }, t))), el('div', { class: 'gs-left' }, head, parts.left), el('div', { class: 'gs-right' }, parts.right));
+      }
       return el(
         'div',
         { class: cls, 'data-pid': id },
         el('div', { class: 'hseat-tags' }, tags.map(([t, c]) => el('span', { class: c }, t))),
-        el('div', { class: 'hseat-head' }, el('div', { class: 'hseat-av', style: { '--hue': hueOf(name) } }, initial(name), g?.turn === id && g.phase !== 'result' ? timerRing() : null), el('div', { style: { minWidth: 0 } }, el('div', { class: 'hseat-name' }, name + (id === s.me ? ' (나)' : '')), el('div', { class: 'hseat-chips' }, `🪙 ${fmt(p?.chips ?? 0)}`))),
+        head,
         ...body,
       );
     }),
@@ -507,6 +515,40 @@ function captGroups(ids, size = 'xs', pid = '') {
   );
 }
 const piLabel = (ids) => ids.reduce((s, c) => s + (card(c).kind === 'ssangpi' || card(c).joker ? 2 : 1), 0);
+
+/** 점수·고·흔들기 배지 */
+function scoreBadges(id) {
+  const g = G();
+  const sc = g.scores[id];
+  return el(
+    'div',
+    { class: 'gs-score' },
+    el('b', { class: sc.total >= g.rule.win ? 'hot' : '' }, sc.total, el('small', {}, '점')),
+    g.goCount[id] ? el('span', { class: 'go' }, `${g.goCount[id]}고`) : null,
+    g.shakes[id] ? el('span', {}, `흔들 ×${2 ** g.shakes[id]}`) : null,
+    g.ppeokCount[id] ? el('span', { class: 'pp' }, `뻑 ${g.ppeokCount[id]}`) : null,
+    g.skips[id] ? el('span', {}, `뒤집기 ${g.skips[id]}`) : null,
+  );
+}
+
+/** 상대 패널: 왼쪽(점수) / 오른쪽(손패 뒷면 + 먹은 패) */
+function gostopPanel(id) {
+  const g = G();
+  const h = g.hands[id];
+  const left = [scoreBadges(id)];
+  if (g.phase === 'result' && g.result.winner) {
+    const pay = g.result.payments.find((x) => x.from === id);
+    if (g.result.winner === id) left.push(el('div', { class: 'hseat-won' }, `+${fmt(g.result.payments.reduce((a, x) => a + x.chips, 0))}`));
+    else if (pay) left.push(el('div', { class: 'hseat-lost' }, `−${fmt(pay.chips)}${pay.tags.length ? ` (${pay.tags.join('·')})` : ''}`));
+  }
+  const handRow = el(
+    'div',
+    { class: 'hseat-cards backs gs-hand' },
+    typeof h === 'number' ? Array.from({ length: Math.min(h, 10) }, () => backEl({ size: 'xs' })) : h.map((c) => cardEl(c, { size: 'xs' })),
+    el('span', { class: 'gs-count' }, `${typeof h === 'number' ? h : h.length}장`),
+  );
+  return { left, right: [handRow, captGroups(g.captured[id], 'sm', id)] };
+}
 
 function gostopSeat(id) {
   const g = G();
@@ -551,6 +593,7 @@ function renderCenter() {
   } else if (g.kind === 'seotda') nodes.push(...seotdaCenter());
   else nodes.push(...gostopCenter());
   put($('#center'), ...nodes);
+  fitRing();
 }
 
 function chipPile(amount) {
@@ -583,6 +626,37 @@ function seotdaCenter() {
   return out;
 }
 
+/*
+ * 바닥 자리 (더미 둘레 16칸, 판 크기에 대한 %). 한 번 놓인 달은 그 판이 끝날 때까지 같은 자리에 있다.
+ * 위 6칸 / 가운데 양옆 4칸 / 아래 6칸
+ */
+const FLOOR_SLOTS = [
+  [2, 0], [18, 0], [34, 0], [50, 0], [66, 0], [82, 0],
+  [2, 34], [18, 34], [66, 34], [82, 34],
+  [2, 68], [18, 68], [34, 68], [50, 68], [66, 68], [82, 68],
+];
+// 가운데에 가까운 칸부터 채운다
+const SLOT_ORDER = [8, 7, 2, 3, 13, 12, 9, 6, 1, 4, 14, 11, 0, 5, 15, 10];
+let slotGame = null;
+const slotOf = new Map();
+function floorSlots(g) {
+  const key = `${state.gameNo}:${g.order.join(',')}`;
+  if (slotGame !== key) {
+    slotGame = key;
+    slotOf.clear();
+  }
+  const months = [...new Set(g.floor.map((c) => card(c).month))];
+  for (const m of [...slotOf.keys()]) if (!months.includes(m)) slotOf.delete(m);
+  const used = new Set(slotOf.values());
+  for (const m of months) {
+    if (slotOf.has(m)) continue;
+    const free = SLOT_ORDER.find((i) => !used.has(i));
+    slotOf.set(m, free ?? 0);
+    used.add(free ?? 0);
+  }
+  return slotOf;
+}
+
 function gostopCenter() {
   const g = G();
   // 바닥: 달별로 묶기
@@ -592,17 +666,19 @@ function gostopCenter() {
     if (!groups.has(m)) groups.set(m, []);
     groups.get(m).push(c);
   }
+  const slots = floorSlots(g);
   const selecting = pendingPlay?.choose ? new Set(pendingPlay.choose) : g.pending?.options ? new Set(g.pending.options) : null;
+  const deck = el('div', { class: 'deck-pile' }, g.deckCount ? [backEl({ size: 'md', attrs: { style: { transform: 'translate(4px,4px)' } } }), backEl({ size: 'md', attrs: { style: { transform: 'translate(2px,2px)' } } }), backEl({ size: 'md' })] : null, el('div', { class: 'cnt' }, `${g.deckCount}`));
   const floor = el(
     'div',
-    { class: 'floor' },
+    { class: 'floor hw-ring' },
+    deck,
     groups.size
       ? [...groups.entries()]
-          .sort((a, b) => a[0] - b[0])
           .map(([m, cs]) =>
             el(
               'div',
-              { class: `floor-group${g.ppeok.includes(m) ? ' ppeok' : ''}`, 'data-month': m },
+              { class: `floor-group${g.ppeok.includes(m) ? ' ppeok' : ''}`, 'data-month': m, style: { left: `${FLOOR_SLOTS[slots.get(m)][0]}%`, top: `${FLOOR_SLOTS[slots.get(m)][1]}%` } },
               cs.map((c) => {
                 const sel = selecting?.has(c) && (g.turn === state.me);
                 return cardEl(c, {
@@ -613,25 +689,9 @@ function gostopCenter() {
               }),
             ),
           )
-      : el('div', { class: 'floor-empty' }, '바닥이 비었어요'),
+      : null,
   );
-  const deck = el('div', { class: 'deck-pile' }, g.deckCount ? [backEl({ size: 'md', attrs: { style: { transform: 'translate(3px,3px)' } } }), backEl({ size: 'md' })] : null, el('div', { class: 'cnt' }, `더미 ${g.deckCount}장`));
-  const out = [el('div', { class: 'floor-wrap' }, deck, floor)];
-  // 직전 차례
-  if (g.last && g.phase !== 'result') {
-    const L = g.last;
-    out.push(
-      el(
-        'div',
-        { class: 'last-move' },
-        `${nameOf(L.pid)}: `,
-        L.played.length ? ['낸 패', ...L.played.map((c) => cardEl(c, { size: 'xs' }))] : '뒤집기만',
-        L.flipped ? [' · 뒤집은 패', cardEl(L.flipped, { size: 'xs' })] : null,
-        L.took.length ? ` · ${L.took.length}장 먹음` : '',
-        L.stolen?.length ? ` · 피 ${L.stolen.length}장 뺏음` : '',
-      ),
-    );
-  }
+  const out = [el('div', { class: 'floor-wrap' }, floor)];
   if (g.phase === 'chooseFlip' && g.turn === state.me) out.push(el('div', { class: 'choose-box' }, el('b', {}, '뒤집은 패로 먹을 바닥 패를 고르세요'), el('div', { class: 'row' }, cardEl(g.pending.flip, { size: 'md' }), '→', g.pending.options.map((c) => cardEl(c, { size: 'md', cls: 'selectable', attrs: { onclick: () => call('choose', { card: c }), role: 'button', tabindex: 0 } })))));
   else if (g.phase === 'chooseFlip') out.push(el('div', { class: 'muted' }, `${nameOf(g.turn)}님이 먹을 패를 고르는 중…`));
   if (pendingPlay?.choose) out.push(el('div', { class: 'choose-box' }, el('b', {}, '바닥에서 먹을 패를 고르세요 (반짝이는 패)'), el('button', { class: 'btn small ghost', onclick: () => ((pendingPlay = null), render()) }, '취소')));
@@ -642,24 +702,36 @@ function gostopCenter() {
       mine
         ? el(
             'div',
-            { class: 'gostop-box' },
+            { class: 'gostop-box pop-center' },
             el('b', {}, `${sc.total}점! 계속할까요?`),
             el('div', { class: 'score-items' }, sc.items.map(([n, v]) => el('span', {}, n, el('b', {}, `${v}점`)))),
             el('div', { class: 'row' }, el('button', { class: 'btn go', onclick: () => call('goStop', { choice: 'go' }) }, `${(g.goCount[state.me] ?? 0) + 1}고!`), el('button', { class: 'btn stop', onclick: () => call('goStop', { choice: 'stop' }) }, '스톱')),
             el('div', { class: 'turn-bar', style: { width: '100%' } }, el('i', { style: { width: '100%' } })),
           )
-        : el('div', { class: 'gostop-box' }, el('b', {}, `${nameOf(g.turn)}님 ${sc.total}점 — 고? 스톱?`)),
+        : el('div', { class: 'gostop-box pop-center small' }, el('b', {}, `${nameOf(g.turn)}님 ${sc.total}점 — 고? 스톱?`)),
     );
   }
   if (g.phase === 'result') out.push(gostopResult());
   return out;
 }
 
+/** 바닥 판을 가운데 칸 크기에 맞춘다 (가로·세로 중 작은 쪽 기준) */
+function fitRing() {
+  const c = document.querySelector('.hw-center');
+  const r = document.querySelector('.floor.hw-ring');
+  if (!c || !r) return;
+  const w = Math.max(260, Math.min(c.clientWidth - 12, (c.clientHeight - 12) * (640 / 330), 760));
+  r.style.width = w + 'px';
+  r.style.height = (w * 330) / 640 + 'px';
+}
+if (window.ResizeObserver) new ResizeObserver(() => fitRing()).observe(document.querySelector('.hw-center') ?? document.body);
+window.addEventListener('resize', fitRing);
+
 function gostopResult() {
   const g = G();
   const r = g.result;
   const next = state.running ? el('div', { class: 'muted' }, '곧 다음 판이 시작돼요') : isHost() ? el('button', { class: 'btn primary', onclick: () => call('start') }, '다음 판') : null;
-  if (!r.winner) return el('div', { class: 'result-card' }, el('h2', {}, r.aborted ? '이번 판은 무효' : '나가리!'), el('div', { class: 'calc' }, r.aborted ? '참가자가 나가서 판을 무효로 했어요' : `아무도 못 났어요. 다음 판은 ${r.nextNagari}배!`), next);
+  if (!r.winner) return el('div', { class: 'result-card pop-center gs-res' }, el('h2', {}, r.aborted ? '이번 판은 무효' : '나가리!'), el('div', { class: 'calc' }, r.aborted ? '참가자가 나가서 판을 무효로 했어요' : `아무도 못 났어요. 다음 판은 ${r.nextNagari}배!`), next);
   const parts = [`${r.score.total}점`];
   if (r.chongtong) parts[0] = `총통 (${r.chongtong}월)`;
   if (r.threePpeok) parts[0] = '3뻑';
@@ -669,10 +741,13 @@ function gostopResult() {
   if (r.goMul > 1) muls.push(`${r.go}고 ×${r.goMul}`);
   if (r.shakeMul > 1) muls.push(`흔들기·폭탄 ×${r.shakeMul}`);
   if (r.nagariMul > 1) muls.push(`나가리 ×${r.nagariMul}`);
+  const iWon = r.winner === state.me;
   return el(
     'div',
-    { class: 'result-card' },
-    el('h2', {}, `${nameOf(r.winner)}님 승리!`),
+    { class: `result-card pop-center gs-res${iWon ? ' me' : ''}` },
+    el('div', { class: 'res-crown' }, iWon ? '🏆' : '👑'),
+    el('h2', {}, iWon ? '승리!' : `${nameOf(r.winner)}님 승리!`),
+    el('div', { class: 'res-points' }, el('b', {}, r.points), el('small', {}, '점')),
     el('div', { class: 'score-items' }, r.score.items.map(([n, v]) => el('span', {}, n, el('b', {}, `${v}점`)))),
     el('div', { class: 'calc' }, el('b', {}, parts.join(' ')), muls.length ? ` · ${muls.join(' · ')}` : '', ` = `, el('b', {}, `${r.points}점`), ` · 점당 ${fmt(state.settings.pointChips)}칩`),
     el(
@@ -757,11 +832,14 @@ function gostopMine() {
       return node;
     }),
   );
-  const sc = g.scores[state.me];
-  const info = [
-    el('div', { class: 'my-jokbo' }, el('b', { class: sc.total >= g.rule.win ? 'top' : '' }, `${sc.total}점`), el('small', {}, `${g.rule.win}점부터 날 수 있어요`), g.goCount[state.me] ? el('span', { class: 'sp' }, `${g.goCount[state.me]}고 중`) : null),
+  const me = state.players.find((p) => p.id === state.me);
+  const top = el(
+    'div',
+    { class: 'gs-me-top' },
+    el('div', { class: 'gs-me-plate' }, el('div', { class: 'hseat-av', style: { '--hue': hueOf(me?.name) } }, initial(me?.name), g.turn === state.me && g.phase !== 'result' ? timerRing() : null), el('div', {}, el('div', { class: 'hseat-name' }, `${me?.name ?? ''} (나)`), el('div', { class: 'hseat-chips' }, `🪙 ${fmt(me?.chips ?? 0)}`)), scoreBadges(state.me), el('small', { class: 'muted' }, `${g.rule.win}점부터`)),
     captGroups(g.captured[state.me], 'sm', state.me),
-  ];
+  );
+  const info = [];
   const acts = [];
   if (g.canFlipOnly) acts.push(el('button', { class: 'btn raise', onclick: () => call('play', { flipOnly: true }) }, `🂠 뒤집기만 (${g.skips[state.me]}번 남음)`));
   if (pendingPlay?.ask) {
@@ -776,7 +854,7 @@ function gostopMine() {
   if (acts.length) info.push(el('div', { class: 'hw-actions' }, acts));
   if (myTurn || (g.turn === state.me && g.phase !== 'result')) info.push(el('div', { class: 'turn-bar' }, el('i', { style: { width: '100%' } })));
   else if (g.phase !== 'result') info.push(el('div', { class: 'me-wait' }, `${nameOf(g.turn)}님 차례예요.`));
-  return [el('div', { class: 'me-row' }, hand), el('div', { class: 'me-info' }, ...info)];
+  return [top, el('div', { class: 'me-row' }, hand), el('div', { class: 'me-info' }, ...info)];
 }
 
 function playCard(c) {
