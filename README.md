@@ -60,7 +60,15 @@
 ### 카드 그림
 - 한국 화투 그림: Wikimedia Commons 의 Hwatu SVG (작가 Pk0001, CC BY-SA 4.0). 출처와 라이선스는 `public/img/hwatu/LICENSE.md`
 - 파일 하나에 같은 달 4장이 들어 있어서 `#svgView(viewBox(...))` 로 한 장씩 잘라 써요 (`public/js/hwatu/card.js`)
-- **도구리 스킨**: `public/img/doguri/joker.png`(조커 그림), `public/img/doguri/back.png`(카드 뒷면 그림)을 넣으면 자동으로 바뀌어요
+- **도구리 카드**: 조커 4장과 카드 뒷면은 도구리(엔씨 캐릭터) 그림이에요. `node scripts/make-doguri-cards.cjs` 로 `public/img/hwatu/doguri-*.svg` 를 다시 만들 수 있어요
+- 공식 그림으로 바꾸려면 `public/img/doguri/joker.png`(조커), `public/img/doguri/back.png`(뒷면)을 넣으면 자동으로 그 그림을 써요
+
+### 패 모션
+- 낸 패: 손에서 들어 올렸다가 바닥 같은 달 패 위로 내리꽂힘 → 번쩍·링·바닥 패 움찔 (폭탄·쪽은 불티)
+- 더미 패: 더미 위로 크게 떠오르며 뒤집혀 보여 준 뒤 떨어짐
+- 먹은 패: 바닥에서 한데 모았다가 먹은 칸으로 쓸려 감, 뺏은 피는 상대 칸에서 날아옴
+- 모션이 끝날 때까지 다음 상태를 기다렸다가 그리고, 그동안 손패는 눌리지 않아요
+- 손패 왼쪽 위 노란 삼각형: 바닥에 같은 달이 있는 패
 
 ### 소리
 - 화투 내려치는 소리·먹는 소리·칩 소리·징, 🗣 버튼으로 음성 콜(「따당!」「고!」「뻑!」) 켜기/끄기

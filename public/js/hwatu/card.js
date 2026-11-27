@@ -25,16 +25,20 @@ const BOXES = {
 /** 카드 id → 잘라 낸 그림 주소 */
 export function artUrl(id) {
   const c = card(id);
-  const file = c.joker ? '00X1' : String(c.month).padStart(3, '0');
-  const idx = c.joker ? Number(id.split('-')[1]) - 1 : Number(id.split('-')[1]);
-  const [x, y, w, h] = BOXES[file][idx];
-  return `/img/hwatu/Hwatu${file}.svg#svgView(viewBox(${x},${y},${w},${h}))`;
+  // 조커는 도구리 카드 (scripts/make-doguri-cards.cjs 로 만든 그림)
+  if (c.joker) return `/img/hwatu/doguri-joker-${Number(id.split('-')[1])}.svg`;
+  const file = String(c.month).padStart(3, '0');
+  const [x, y, w, h] = BOXES[file][Number(id.split('-')[1])];
+  // 붉은 테두리를 조금 깎아 얇게 보이게 한다 (카드 너비의 1.6%)
+  const k = w * 0.016;
+  const f = (n) => n.toFixed(2);
+  return `/img/hwatu/Hwatu${file}.svg#svgView(viewBox(${f(x + k)},${f(y + k)},${f(w - 2 * k)},${f(h - 2 * k)}))`;
 }
 
 /*
  * 카드 스킨: public/img/doguri/ 에 그림 파일을 넣으면 자동으로 쓴다.
  *  - joker.png : 조커 카드 그림
- *  - back.png  : 카드 뒷면 가운데 그림
+ *  - back.png  : 카드 뒷면 그림 (없으면 기본 도구리 뒷면 /img/hwatu/doguri-back.svg)
  */
 export const skin = { joker: null, back: null };
 export async function loadSkin() {
@@ -67,12 +71,12 @@ export function cardEl(id, { size = 'md', cls = '', attrs = {} } = {}) {
   return el(
     'div',
     { class: `hwc ${size} k-${c.kind} m${c.month} ${cls}`, 'data-id': id, title: label, 'aria-label': label, ...attrs },
-    el('div', { class: 'hwc-face' }, el('img', { class: 'hwc-img', src, alt: '', draggable: 'false', decoding: 'async' })),
+    el('div', { class: 'hwc-face' }, el('img', { class: 'hwc-img', src, alt: '', draggable: 'false', decoding: 'async' }), el('i', { class: 'hwc-gloss' })),
   );
 }
 
 export function backEl({ size = 'md', cls = '', attrs = {} } = {}) {
-  return el('div', { class: `hwc back ${size} ${cls}`, 'aria-label': '뒷면', ...attrs }, el('div', { class: 'hwc-face' }));
+  return el('div', { class: `hwc back ${size} ${cls}`, 'aria-label': '뒷면', ...attrs }, el('div', { class: 'hwc-face' }, el('i', { class: 'hwc-gloss' })));
 }
 
 /** 먹은 패를 종류별로 묶는다 (광·열끗·띠·피) */

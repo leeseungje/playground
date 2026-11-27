@@ -41,6 +41,9 @@ let prev = null;
 let receivedAt = 0;
 let lastFx = null;
 let pendingPlay = null; // 고스톱: 바닥 패 고르기·흔들기·폭탄 확인 중인 손패
+let dealMotion = null; // 판 시작 패 까는 모션
+let motionBusy = false; // 고스톱: 패 모션이 도는 중
+let playing = false; // 고스톱: 패를 보내고 서버 답을 기다리는 중 (두 번 누르기 막기)
 
 const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? '나간 사람';
 const isHost = () => state?.hostId === state?.me;
@@ -58,19 +61,54 @@ socket.on('kicked', () => {
   showLobby();
   toast('방에서 나가게 됐어요', 'error');
 });
+// 상태는 차례대로 적용한다. 패 모션이 도는 동안 온 상태는 모션이 끝난 뒤 그린다 (밀리면 빨리 감기)
+const stateQueue = [];
+let pumping = false;
 socket.on('state', (s) => {
+  stateQueue.push({ s, at: performance.now() });
+  if (!pumping) pumpStates();
+});
+async function pumpStates() {
+  pumping = true;
+  try {
+    while (stateQueue.length) {
+      const { s, at } = stateQueue.shift();
+      const motion = applyState(s, at);
+      if (motion) {
+        // 모션이 도는 동안은 손패를 못 누르게 하고(applyState 에서 잠금), 끝나면 풀고 다시 그린다
+        if (stateQueue.length < 3) await Promise.race([motion, new Promise((r) => setTimeout(r, 4000))]);
+        motionBusy = false;
+        if (!stateQueue.length) render();
+      }
+    }
+  } finally {
+    pumping = false;
+  }
+}
+function applyState(s, at) {
   finishAll();
   const sameGostop = state?.game?.kind === 'gostop' && s.game?.kind === 'gostop' && state.gameNo === s.gameNo;
   const snap = sameGostop ? snapshot(s.me) : null;
   prev = state;
   state = s;
-  receivedAt = performance.now();
+  receivedAt = at;
   if (G()?.kind !== 'gostop' || G()?.turn !== s.me || G()?.phase !== 'play') pendingPlay = null;
+  playing = false;
+  motionBusy = !!snap || (s.game?.kind === 'gostop' && s.gameNo !== prev?.gameNo);
+  dealMotion = null;
   showGame();
   effects();
   render();
-  if (snap) animateTurn(snap, prev.game, state.game);
-});
+  const turn = snap ? animateTurn(snap, prev.game, state.game) : null;
+  // 고스톱 판 시작이면 패 까는 모션도 기다린다
+  const deal = s.game?.kind === 'gostop' ? dealMotion : null;
+  if (turn || deal) return Promise.all([turn, deal]);
+  if (motionBusy) {
+    motionBusy = false;
+    render();
+  }
+  return null;
+}
 
 // ───────── 입장 ─────────
 const params = new URLSearchParams(location.search);
@@ -277,7 +315,11 @@ function effects() {
     switch (f.name) {
       case 'deal':
         // 화면이 다 그려진 뒤 자리 위치를 잡아 날린다
-        requestAnimationFrame(() => dealAnimation(f));
+        {
+          const no = state.gameNo;
+          // 빨리 감기로 다음 판 상태가 먼저 그려졌으면 늦은 딜 모션은 건너뛴다
+          dealMotion = new Promise((res) => requestAnimationFrame(() => res(state.gameNo === no && stateQueue.length < 3 ? dealAnimation(f) : null)));
+        }
         break;
       case 'bet':
         play(f.type === 'die' ? 'fold' : f.type === 'check' ? 'check' : 'chips', 0, f.type === 'max' || f.type === 'half' ? 6 : 3);
@@ -306,7 +348,7 @@ function effects() {
       case 'take':
         break; // 패 모션(motion.js)이 부딪히는 순간에 소리를 낸다
       case 'steal':
-        play('steal', 1300);
+        play('steal', 2500);
         break;
       case 'go':
         dealer.mood('happy');
@@ -342,15 +384,15 @@ function effects() {
         break;
       default:
         if (CALL[f.name]) {
-          if (['jjok', 'ttadak', 'sseul', 'bomb', 'chongtong'].includes(f.name)) setTimeout(() => shake(document.querySelector('.hw-table'), 1.4), 950);
+          if (['jjok', 'ttadak', 'sseul', 'bomb', 'chongtong'].includes(f.name)) setTimeout(() => shake(document.querySelector('.hw-table'), 1.4), 1300);
           const [text, voice, cls] = CALL[f.name];
           setTimeout(() => {
             callout(text, who, cls);
             speak(voice);
-          }, f.name === 'shake' || f.name === 'chongtong' || f.name === 'nagari' ? 0 : 950);
-          if (f.name === 'ppeok') play('ppeok', 1000);
+          }, f.name === 'shake' || f.name === 'chongtong' || f.name === 'nagari' ? 0 : 1300);
+          if (f.name === 'ppeok') play('ppeok', 1350);
           else if (f.name === 'nagari') play('gong');
-          else play('big', 950);
+          else play('big', 1300);
         }
     }
   }
@@ -371,16 +413,18 @@ function dealAnimation(f) {
   if (!g) return;
   const seatOf = (id) => (id === state.me ? document.querySelector('#mine .me-hand') ?? document.querySelector(`.hseat[data-pid="${id}"]`) : document.querySelector(`.hseat[data-pid="${id}"] .hseat-cards`) ?? document.querySelector(`.hseat[data-pid="${id}"]`));
   const targets = [];
+  let motion = null;
   if (g.kind === 'seotda') {
     for (const id of g.order) if (!g.folded.includes(id)) targets.push(seatOf(id));
   } else {
     // 고스톱: 상대에게는 뒷면을 날리고, 바닥과 내 손패는 한 장씩 깔며 뒤집는다
     for (let r = 0; r < 3; r++) for (const id of g.order) if (id !== state.me) targets.push(seatOf(id));
     if (g.sale) targets.push(document.querySelector(`.hseat[data-pid="${g.sale.seller}"]`));
-    animateDeal(rectFrom(document.querySelector('.hd-deck')));
+    motion = animateDeal(rectFrom(document.querySelector('.hd-deck')));
   }
   dealer.deal(targets.filter(Boolean), { gap: g.kind === 'seotda' ? 120 : 70 });
   if (g.kind === 'seotda') setTimeout(() => play('squeeze'), targets.length * 120 + 200);
+  return motion;
 }
 
 // ───────── 타이머 ─────────
@@ -812,7 +856,7 @@ function seotdaMine() {
 
 function gostopMine() {
   const g = G();
-  const myTurn = g.turn === state.me && g.phase === 'play';
+  const myTurn = g.turn === state.me && g.phase === 'play' && !motionBusy;
   const hand = el(
     'div',
     { class: 'me-hand gostop' },
@@ -841,7 +885,7 @@ function gostopMine() {
   );
   const info = [];
   const acts = [];
-  if (g.canFlipOnly) acts.push(el('button', { class: 'btn raise', onclick: () => call('play', { flipOnly: true }) }, `🂠 뒤집기만 (${g.skips[state.me]}번 남음)`));
+  if (g.canFlipOnly) acts.push(el('button', { class: 'btn raise', onclick: () => flipOnly() }, `🂠 뒤집기만 (${g.skips[state.me]}번 남음)`));
   if (pendingPlay?.ask) {
     const { card: c, ask } = pendingPlay;
     acts.push(
@@ -858,6 +902,7 @@ function gostopMine() {
 }
 
 function playCard(c) {
+  if (playing) return;
   const g = G();
   const pl = g.playable?.[c];
   if (!pl) return;
@@ -874,6 +919,12 @@ function playCard(c) {
   }
   sendPlay(c, {});
 }
+async function flipOnly() {
+  if (playing || motionBusy) return;
+  playing = true;
+  const r = await call('play', { flipOnly: true });
+  if (r.error) playing = false;
+}
 function pickFloor(target) {
   const g = G();
   if (g.phase === 'chooseFlip') return call('choose', { card: target });
@@ -887,9 +938,19 @@ async function sendPlay(c, opts) {
     pendingPlay = { card: c, choose: pl.matches, shake: opts.shake };
     return render();
   }
+  if (playing) return;
   const extra = pendingPlay?.shake ? { shake: true } : {};
   pendingPlay = null;
+  playing = true;
+  // 누른 패를 바로 들어 올려 반응을 보여 준다 (날아가는 모션은 이 자리에서 이어진다)
+  const picked = document.querySelector(`#mine .me-hand .hwc[data-id="${c}"]`);
+  picked?.classList.add('picked');
+  play('flip');
   const r = await call('play', { card: c, ...extra, ...opts });
+  if (r.error) {
+    playing = false;
+    picked?.classList.remove('picked');
+  }
   if (r.choose) {
     pendingPlay = { card: c, choose: r.choose };
     render();
